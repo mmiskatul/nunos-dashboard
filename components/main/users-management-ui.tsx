@@ -17,12 +17,67 @@ import type { useUsersManagement } from "@/components/main/users-management-logi
 
 type UsersManagementUIProps = ReturnType<typeof useUsersManagement>;
 
-function safeImageSrc(src: string | null | undefined, fallbackSeed: string) {
+function safeImageSrc(src: string | null | undefined) {
   const value = typeof src === "string" ? src.trim() : "";
-  if (value.length > 0) {
-    return value;
+  return value.length > 0 ? value : null;
+}
+
+function userInitial(name: string) {
+  const value = name.trim();
+  return value ? value.charAt(0).toUpperCase() : "U";
+}
+
+function avatarPalette(seed: string) {
+  const palettes = [
+    "bg-[#dbe7ff] text-[#1f3d8f]",
+    "bg-[#dff7ec] text-[#137f56]",
+    "bg-[#ffe7d6] text-[#c46a12]",
+    "bg-[#f6e1ff] text-[#8b3bb0]",
+    "bg-[#fde2ea] text-[#be3455]",
+    "bg-[#e6ecf7] text-[#415a92]",
+  ];
+
+  const normalized = seed.trim() || "user";
+  const hash = Array.from(normalized).reduce((total, char) => total + char.charCodeAt(0), 0);
+  return palettes[hash % palettes.length];
+}
+
+function Avatar({
+  src,
+  name,
+  seed,
+  size,
+  className = "",
+}: {
+  src: string | null | undefined;
+  name: string;
+  seed: string;
+  size: number;
+  className?: string;
+}) {
+  const imageSrc = safeImageSrc(src);
+  const dimensionClass = size === 72 ? "h-[72px] w-[72px] text-[26px]" : "h-7 w-7 text-[12px]";
+
+  if (imageSrc) {
+    return (
+      <Image
+        src={imageSrc}
+        alt={name}
+        width={size}
+        height={size}
+        className={`${dimensionClass} rounded-full object-cover ${className}`.trim()}
+      />
+    );
   }
-  return `https://i.pravatar.cc/120?u=${encodeURIComponent(fallbackSeed)}`;
+
+  return (
+    <div
+      aria-label={name}
+      className={`${dimensionClass} ${avatarPalette(seed)} grid place-items-center rounded-full font-semibold ${className}`.trim()}
+    >
+      {userInitial(name)}
+    </div>
+  );
 }
 
 function statusClass(status: UserStatus) {
@@ -265,12 +320,11 @@ export function UsersManagementUI({
                     <td className="border-b border-[#edf1fa] px-4 py-4 text-[12px] text-[#9aa6c0] ">{user.id}</td>
                     <td className="border-b border-[#edf1fa] px-4 py-4">
                       <div className="flex items-center gap-2.5">
-                        <Image
-                          src={safeImageSrc(user.avatar, user.id || user.email || user.name)}
-                          alt={user.name}
-                          width={28}
-                          height={28}
-                          className="h-7 w-7 rounded-full"
+                        <Avatar
+                          src={user.avatar}
+                          name={user.name}
+                          seed={user.id || user.email || user.name}
+                          size={28}
                         />
                         <div>
                           <div className="text-[13px] font-semibold text-[#1f2d46]">{user.name}</div>
@@ -390,12 +444,12 @@ export function UsersManagementUI({
             <div className="flex-1 overflow-y-auto px-6 py-6">
               <div className="mx-auto mb-6 flex w-fit flex-col items-center">
                 <div className="relative">
-                  <Image
-                    src={safeImageSrc(selectedUser.avatar, selectedUser.id || selectedUser.email || selectedUser.name)}
-                    alt={selectedUser.name}
-                    width={72}
-                    height={72}
-                    className="h-[72px] w-[72px] rounded-full border-[3px] border-[#eef2f9]"
+                  <Avatar
+                    src={selectedUser.avatar}
+                    name={selectedUser.name}
+                    seed={selectedUser.id || selectedUser.email || selectedUser.name}
+                    size={72}
+                    className="border-[3px] border-[#eef2f9]"
                   />
                   <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-white bg-[#18b67a]" />
                 </div>
@@ -454,7 +508,7 @@ export function UsersManagementUI({
                     (booking, index) => (
                       <div key={`${booking.hotel}-${booking.range}-${index}`} className="flex items-center gap-2 rounded-lg border border-[#eef2f9] bg-white p-2">
                         <Image
-                          src={safeImageSrc(booking.image, `${selectedUser.id}-${booking.hotel}`)}
+                          src={booking.image}
                           alt={booking.hotel}
                           width={34}
                           height={34}

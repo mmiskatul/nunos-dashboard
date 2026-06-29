@@ -14,7 +14,7 @@ export type UserProfile = {
   id: string;
   name: string;
   email: string;
-  avatar: string;
+  avatar: string | null;
   status: UserStatus;
   totalBookings: number;
   joinedDate: string;

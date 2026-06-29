@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { SummaryCard, UserProfile, UserStatus } from "@/components/main/users-management-types";
+
+const pageSize = 5;
+const usersRefreshIntervalMs = 30_000;
+
 async function fetchUsers(signal?: AbortSignal) {
   const response = await fetch("/api/users", { signal });
   if (!response.ok) {
     throw new Error("Failed to load users");
   }
-  return (await response.json()) as { users: UserProfile[] };
+  return (await response.json()) as { users: UserProfile[]; summaryCards: SummaryCard[] };
 }
 
 async function updateUserAction(id: string, action: "block" | "unblock" | "resetPassword") {
@@ -25,10 +29,28 @@ async function updateUserAction(id: string, action: "block" | "unblock" | "reset
   return data.user;
 }
 
-const pageSize = 5;
+function syncSummaryCards(baseCards: SummaryCard[], users: UserProfile[]) {
+  const totalUsers = users.length;
+  const activeUsers = users.filter((user) => user.status === "ACTIVE").length;
+  const blockedUsers = users.filter((user) => user.status === "BLOCKED").length;
+
+  return baseCards.map((card) => {
+    if (card.label === "TOTAL USERS") {
+      return { ...card, value: totalUsers.toLocaleString() };
+    }
+    if (card.label === "ACTIVE USERS") {
+      return { ...card, value: activeUsers.toLocaleString() };
+    }
+    if (card.label === "BLOCKED USERS") {
+      return { ...card, value: blockedUsers.toLocaleString() };
+    }
+    return card;
+  });
+}
 
 export function useUsersManagement(initialData: { users: UserProfile[]; summaryCards: SummaryCard[] }) {
   const [users, setUsers] = useState<UserProfile[]>(initialData.users);
+  const [baseSummaryCards, setBaseSummaryCards] = useState<SummaryCard[]>(initialData.summaryCards);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | UserStatus>("ALL");
@@ -83,30 +105,18 @@ export function useUsersManagement(initialData: { users: UserProfile[]; summaryC
   );
 
   const summaryCards = useMemo(() => {
-    const totalUsers = users.length;
-    const activeUsers = users.filter((user) => user.status === "ACTIVE").length;
-    const blockedUsers = users.filter((user) => user.status === "BLOCKED").length;
-    return initialData.summaryCards.map((card) => {
-      if (card.label === "TOTAL USERS") {
-        return { ...card, value: totalUsers.toLocaleString() };
-      }
-      if (card.label === "ACTIVE USERS") {
-        return { ...card, value: activeUsers.toLocaleString() };
-      }
-      if (card.label === "BLOCKED USERS") {
-        return { ...card, value: blockedUsers.toLocaleString() };
-      }
-      return card;
-    });
-  }, [initialData.summaryCards, users]);
+    return syncSummaryCards(baseSummaryCards, users);
+  }, [baseSummaryCards, users]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    const loadUsers = async () => {
+    const refreshUsers = async (signal?: AbortSignal) => {
       try {
-        const data = await fetchUsers(controller.signal);
+        const data = await fetchUsers(signal);
         if (Array.isArray(data.users)) {
           setUsers(data.users);
+        }
+        if (Array.isArray(data.summaryCards)) {
+          setBaseSummaryCards(data.summaryCards);
         }
       } catch (error) {
         if ((error as { name?: string }).name !== "AbortError") {
@@ -114,9 +124,33 @@ export function useUsersManagement(initialData: { users: UserProfile[]; summaryC
         }
       }
     };
-    loadUsers();
-    return () => controller.abort();
+
+    const controller = new AbortController();
+    void refreshUsers(controller.signal);
+
+    const intervalId = window.setInterval(() => {
+      void refreshUsers();
+    }, usersRefreshIntervalMs);
+
+    const handleWindowFocus = () => {
+      void refreshUsers();
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleWindowFocus);
+
+    return () => {
+      controller.abort();
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleWindowFocus);
+    };
   }, []);
+
+  useEffect(() => {
+    setUsers(initialData.users);
+    setBaseSummaryCards(initialData.summaryCards);
+  }, [initialData.summaryCards, initialData.users]);
 
   const persistUserAction = async (id: string, action: "block" | "unblock" | "resetPassword") => {
     const applyLocalUpdate = (current: UserProfile) => {
@@ -154,12 +188,26 @@ export function useUsersManagement(initialData: { users: UserProfile[]; summaryC
     try {
       const updated = await updateUserAction(id, action);
       setUsers((prev) => prev.map((user) => (user.id === id ? updated : user)));
-    } catch {
-      const controller = new AbortController();
+
       try {
-        const data = await fetchUsers(controller.signal);
+        const data = await fetchUsers();
         if (Array.isArray(data.users)) {
           setUsers(data.users);
+        }
+        if (Array.isArray(data.summaryCards)) {
+          setBaseSummaryCards(data.summaryCards);
+        }
+      } catch {
+        return;
+      }
+    } catch {
+      try {
+        const data = await fetchUsers();
+        if (Array.isArray(data.users)) {
+          setUsers(data.users);
+        }
+        if (Array.isArray(data.summaryCards)) {
+          setBaseSummaryCards(data.summaryCards);
         }
       } catch {
         return;

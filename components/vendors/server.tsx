@@ -10,7 +10,7 @@ type DataPayload = {
     category: "HOSPITALITY" | "DINING" | "RENTALS";
     bookings: number;
     rating: number;
-    status: "PENDING" | "APPROVED" | "REJECTED";
+    status: "PENDING" | "APPROVED" | "REJECTED" | "BLOCKED";
     avatar: string;
     verification: {
       description: string;

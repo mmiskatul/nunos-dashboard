@@ -41,6 +41,7 @@ type Offer = {
   startDate: string;
   endDate: string;
   discountValue: number;
+  selectedVendorIds: string[];
   providerCount: number;
   engagedUsers: number;
   providerBreakdown: Array<{
@@ -52,6 +53,14 @@ type Offer = {
     engagedUsers: number;
     active: boolean;
   }>;
+};
+
+type OfferSummaryCard = { label: string; value: string; note: string; tone: string };
+type OfferVendor = {
+  id: string;
+  businessName: string;
+  category?: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "BLOCKED";
 };
 
 function offerStatusClass(status: OfferStatus) {
@@ -66,22 +75,55 @@ function offerKindIcon(kind: DiscountKind) {
 }
 
 const pageSize = 5;
+const offersRefreshIntervalMs = 30_000;
+
+async function fetchOffers() {
+  const response = await fetch("/api/offers");
+  if (!response.ok) {
+    throw new Error("Failed to load offers");
+  }
+  return (await response.json()) as { summaryCards: OfferSummaryCard[]; offers: Offer[] };
+}
+
+async function fetchOfferDetails(id: string) {
+  const response = await fetch(`/api/offers/${encodeURIComponent(id)}`);
+  if (!response.ok) {
+    throw new Error("Failed to load offer details");
+  }
+  return (await response.json()) as { offer: Offer };
+}
+
+function syncSummaryCards(baseCards: OfferSummaryCard[], offers: Offer[]) {
+  const activeOffers = offers.filter((offer) => offer.status === "Active").length;
+  const inactiveOffers = offers.filter((offer) => offer.status === "Inactive").length;
+  const totalRedemptions = offers.reduce((sum, offer) => sum + offer.redemptions, 0);
+
+  return baseCards.map((card) => {
+    if (card.label === "ACTIVE OFFERS") return { ...card, value: activeOffers.toLocaleString() };
+    if (card.label === "EXPIRED OFFERS") return { ...card, value: inactiveOffers.toLocaleString() };
+    if (card.label === "TOTAL REDEMPTIONS") return { ...card, value: totalRedemptions.toLocaleString() };
+    return card;
+  });
+}
 
 export function OffersManagementView({
   data
 }: {
-  data: { summaryCards: Array<{ label: string; value: string; note: string; tone: string }>; offers: Offer[] };
+  data: { summaryCards: OfferSummaryCard[]; offers: Offer[]; vendors: OfferVendor[] };
 }) {
   const startDateInputRef = useRef<HTMLInputElement | null>(null);
   const endDateInputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [offers, setOffers] = useState<Offer[]>(data.offers);
+  const [baseSummaryCards, setBaseSummaryCards] = useState<OfferSummaryCard[]>(data.summaryCards);
   const [discountFilter, setDiscountFilter] = useState<"ALL" | "PERCENT" | "FLAT" | "BOGO">("ALL");
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsOffer, setDetailsOffer] = useState<Offer | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState("");
   const [deleteConfirmOffer, setDeleteConfirmOffer] = useState<Offer | null>(null);
   const [pauseConfirmOffer, setPauseConfirmOffer] = useState<Offer | null>(null);
   const [providerCategory, setProviderCategory] = useState("All Categories");
@@ -108,10 +150,38 @@ export function OffersManagementView({
   const [formStartDate, setFormStartDate] = useState("");
   const [formEndDate, setFormEndDate] = useState("");
   const [formApplyTo, setFormApplyTo] = useState("All Vendors");
+  const [formSelectedVendorIds, setFormSelectedVendorIds] = useState<string[]>([]);
+  const [formVendorSearch, setFormVendorSearch] = useState("");
   const [formActive, setFormActive] = useState(true);
   const [formError, setFormError] = useState("");
   const [createSaving, setCreateSaving] = useState(false);
   const [editOfferId, setEditOfferId] = useState<string | null>(null);
+
+  const summaryCards = useMemo(() => syncSummaryCards(baseSummaryCards, offers), [baseSummaryCards, offers]);
+  const selectableVendors = useMemo(
+    () => data.vendors.filter((vendor) => vendor.status === "APPROVED"),
+    [data.vendors],
+  );
+  const filteredSelectableVendors = useMemo(() => {
+    const normalizedQuery = formVendorSearch.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return selectableVendors;
+    }
+    return selectableVendors.filter((vendor) =>
+      vendor.businessName.toLowerCase().includes(normalizedQuery) ||
+      vendor.id.toLowerCase().includes(normalizedQuery),
+    );
+  }, [formVendorSearch, selectableVendors]);
+  const vendorGroups = useMemo(() => {
+    const groups = new Map<string, OfferVendor[]>();
+    filteredSelectableVendors.forEach((vendor) => {
+      const category = vendor.category?.trim() || "Uncategorized";
+      const existing = groups.get(category) ?? [];
+      existing.push(vendor);
+      groups.set(category, existing);
+    });
+    return Array.from(groups.entries()).sort(([left], [right]) => left.localeCompare(right));
+  }, [filteredSelectableVendors]);
 
   const formatDateDisplay = (value: string) => {
     if (!value) return "mm/dd/yyyy";
@@ -193,6 +263,47 @@ export function OffersManagementView({
     };
   }, [openMenuId]);
 
+  useEffect(() => {
+    const refreshOffers = async () => {
+      try {
+        const payload = await fetchOffers();
+        if (Array.isArray(payload.offers)) {
+          setOffers(payload.offers);
+        }
+        if (Array.isArray(payload.summaryCards)) {
+          setBaseSummaryCards(payload.summaryCards);
+        }
+      } catch {
+        return;
+      }
+    };
+
+    void refreshOffers();
+    const intervalId = window.setInterval(() => {
+      void refreshOffers();
+    }, offersRefreshIntervalMs);
+
+    const handleWindowRefresh = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      void refreshOffers();
+    };
+
+    window.addEventListener("focus", handleWindowRefresh);
+    document.addEventListener("visibilitychange", handleWindowRefresh);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowRefresh);
+      document.removeEventListener("visibilitychange", handleWindowRefresh);
+    };
+  }, []);
+
+  useEffect(() => {
+    setOffers(data.offers);
+    setBaseSummaryCards(data.summaryCards);
+  }, [data.offers, data.summaryCards]);
+
   const filteredOffers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const base = normalizedQuery
@@ -243,6 +354,8 @@ export function OffersManagementView({
     setFormStartDate("");
     setFormEndDate("");
     setFormApplyTo("All Vendors");
+    setFormSelectedVendorIds([]);
+    setFormVendorSearch("");
     setFormActive(true);
     setFormError("");
     setApplyMenuOpen(false);
@@ -256,25 +369,43 @@ export function OffersManagementView({
     setFormStartDate(offer.startDate ? offer.startDate.slice(0, 10) : "");
     setFormEndDate(offer.endDate ? offer.endDate.slice(0, 10) : "");
     setFormApplyTo(offer.appliedTo);
+    setFormSelectedVendorIds(offer.selectedVendorIds);
     setFormActive(offer.status === "Active");
     setFormError("");
     setEditOfferId(offer.id);
     setCreateOpen(true);
   };
 
-  const openDetails = (offerId: string | null) => {
+  const openDetails = async (offerId: string | null) => {
     if (!offerId) return;
     const found = offers.find((offer) => offer.id === offerId) ?? null;
     setDetailsOffer(found);
     setProviderRows(found?.providerBreakdown ?? []);
     setDetailsOpen(true);
+    setDetailsLoading(true);
+    setDetailsError("");
     setProviderCategory("All Categories");
     setProviderSearch("");
     setProviderMenuOpen(false);
+    try {
+      const payload = await fetchOfferDetails(offerId);
+      if (payload.offer) {
+        setDetailsOffer(payload.offer);
+        setProviderRows(payload.offer.providerBreakdown ?? []);
+      }
+    } catch (error) {
+      setDetailsError(error instanceof Error ? error.message : "Failed to load offer details");
+    } finally {
+      setDetailsLoading(false);
+    }
   };
 
   const handleCreateOffer = async () => {
     if (!formName.trim() || createSaving) return;
+    if (formApplyTo === "Selected Vendors" && formSelectedVendorIds.length === 0) {
+      setFormError("Select at least one vendor for this offer.");
+      return;
+    }
     setFormError("");
     setCreateSaving(true);
     try {
@@ -289,6 +420,7 @@ export function OffersManagementView({
           startDate: formStartDate,
           endDate: formEndDate,
           appliedTo: formApplyTo,
+          selectedVendorIds: formApplyTo === "Selected Vendors" ? formSelectedVendorIds : [],
           active: formActive
         })
       });
@@ -308,9 +440,10 @@ export function OffersManagementView({
       const payload = (await response.json()) as { offer: Offer; offers: Offer[] };
       if (payload?.offers?.length) {
         setOffers(payload.offers);
-      } else if (payload?.offer) {
-        setOffers((prev) => [payload.offer, ...prev]);
       }
+      const refreshed = await fetchOffers().catch(() => null);
+      if (refreshed?.offers) setOffers(refreshed.offers);
+      if (refreshed?.summaryCards) setBaseSummaryCards(refreshed.summaryCards);
       setCreateOpen(false);
       resetCreateForm();
       setPage(1);
@@ -319,6 +452,38 @@ export function OffersManagementView({
     } finally {
       setCreateSaving(false);
     }
+  };
+
+  const toggleSelectedVendor = (vendorId: string) => {
+    setFormSelectedVendorIds((current) =>
+      current.includes(vendorId)
+        ? current.filter((item) => item !== vendorId)
+        : [...current, vendorId],
+    );
+  };
+
+  const toggleVendorGroup = (vendorIds: string[]) => {
+    if (vendorIds.length === 0) {
+      return;
+    }
+
+    setFormSelectedVendorIds((current) => {
+      const allSelected = vendorIds.every((vendorId) => current.includes(vendorId));
+      if (allSelected) {
+        return current.filter((vendorId) => !vendorIds.includes(vendorId));
+      }
+      return Array.from(new Set([...current, ...vendorIds]));
+    });
+  };
+
+  const selectAllFilteredVendors = () => {
+    const vendorIds = filteredSelectableVendors.map((vendor) => vendor.id);
+    setFormSelectedVendorIds((current) => Array.from(new Set([...current, ...vendorIds])));
+  };
+
+  const clearAllFilteredVendors = () => {
+    const vendorIds = new Set(filteredSelectableVendors.map((vendor) => vendor.id));
+    setFormSelectedVendorIds((current) => current.filter((vendorId) => !vendorIds.has(vendorId)));
   };
 
   const handleToggleStatus = async (offer: Offer) => {
@@ -331,6 +496,9 @@ export function OffersManagementView({
     if (!response.ok) return;
     const payload = (await response.json()) as { offers: Offer[] };
     if (payload?.offers?.length) setOffers(payload.offers);
+    const refreshed = await fetchOffers().catch(() => null);
+    if (refreshed?.offers) setOffers(refreshed.offers);
+    if (refreshed?.summaryCards) setBaseSummaryCards(refreshed.summaryCards);
   };
 
   const handleDeleteOffer = async (offer: Offer) => {
@@ -342,6 +510,9 @@ export function OffersManagementView({
     if (!response.ok) return;
     const payload = (await response.json()) as { offers: Offer[] };
     if (payload?.offers?.length) setOffers(payload.offers);
+    const refreshed = await fetchOffers().catch(() => null);
+    if (refreshed?.offers) setOffers(refreshed.offers);
+    if (refreshed?.summaryCards) setBaseSummaryCards(refreshed.summaryCards);
     if (detailsOffer?.id === offer.id) setDetailsOpen(false);
     setDeleteConfirmOffer(null);
   };
@@ -367,7 +538,7 @@ export function OffersManagementView({
         </button>
       </section>
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-        {data.summaryCards.map((card, index) => (
+        {summaryCards.map((card, index) => (
           <article key={card.label} className="rounded-2xl border border-[#e6ecf7] bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
               <div className="grid h-9 w-9 place-items-center rounded-lg bg-[#eef2ff] text-[#1f3d8f]">
@@ -765,6 +936,98 @@ export function OffersManagementView({
                         ))}
                       </div>
                     )}
+                    {formApplyTo === "Selected Vendors" && (
+                      <div className="mt-3 space-y-2">
+                        <div className="flex h-10 items-center gap-2 rounded-xl border border-[#e6ecf7] bg-white px-3">
+                          <FiSearch size={12} className="text-[#94a3b8]" />
+                          <input
+                            type="text"
+                            value={formVendorSearch}
+                            onChange={(event) => setFormVendorSearch(event.target.value)}
+                            placeholder="Search vendors..."
+                            className="w-full border-0 bg-transparent text-[11px] text-[#1f2d46] outline-none placeholder:text-[#94a3b8]"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl border border-[#e6ecf7] bg-[#f8fafc] px-3 py-2 text-[11px]">
+                          <span className="text-[#64748b]">
+                            {formSelectedVendorIds.length} vendor{formSelectedVendorIds.length === 1 ? "" : "s"} selected
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={selectAllFilteredVendors}
+                              className="font-semibold text-[#1f3d8f]"
+                            >
+                              Select All
+                            </button>
+                            <button
+                              type="button"
+                              onClick={clearAllFilteredVendors}
+                              className="font-semibold text-[#64748b]"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+                        <div className="max-h-52 overflow-y-auto rounded-xl border border-[#e6ecf7] bg-white">
+                        {selectableVendors.length === 0 ? (
+                          <div className="px-3 py-3 text-[11px] text-[#94a3b8]">
+                            No approved vendors are available for selection.
+                          </div>
+                        ) : filteredSelectableVendors.length === 0 ? (
+                          <div className="px-3 py-3 text-[11px] text-[#94a3b8]">
+                            No vendors match that search.
+                          </div>
+                        ) : (
+                          vendorGroups.map(([category, vendors]) => {
+                            const vendorIds = vendors.map((vendor) => vendor.id);
+                            const selectedCount = vendorIds.filter((vendorId) => formSelectedVendorIds.includes(vendorId)).length;
+                            const allSelected = selectedCount === vendorIds.length;
+
+                            return (
+                              <div key={category} className="border-b border-[#edf1fa] last:border-b-0">
+                                <div className="flex items-center justify-between bg-[#f8fafc] px-3 py-2 text-[10px]">
+                                  <div>
+                                    <div className="font-semibold text-[#334155]">{category}</div>
+                                    <div className="text-[#94a3b8]">
+                                      {selectedCount}/{vendorIds.length} selected
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleVendorGroup(vendorIds)}
+                                    className="font-semibold text-[#1f3d8f]"
+                                  >
+                                    {allSelected ? "Clear Group" : "Select Group"}
+                                  </button>
+                                </div>
+                                {vendors.map((vendor) => {
+                                  const selected = formSelectedVendorIds.includes(vendor.id);
+                                  return (
+                                    <label
+                                      key={vendor.id}
+                                      className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-[11px] text-[#334155]"
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="truncate font-semibold text-[#1f2d46]">{vendor.businessName}</div>
+                                        <div className="text-[10px] text-[#94a3b8]">{vendor.id}</div>
+                                      </div>
+                                      <input
+                                        type="checkbox"
+                                        checked={selected}
+                                        onChange={() => toggleSelectedVendor(vendor.id)}
+                                        className="h-4 w-4 rounded border-[#cbd5e1] text-[#1f3d8f]"
+                                      />
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })
+                        )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="rounded-2xl border border-[#e6ecf7] bg-[#f8fafc] px-3 py-3">
                     <div className="flex items-center justify-between">
@@ -873,6 +1136,16 @@ export function OffersManagementView({
                     </div>
                   </header>
                   <div className="space-y-4 px-6 py-5">
+                    {detailsLoading && (
+                      <div className="rounded-2xl border border-[#e6ecf7] bg-white px-4 py-3 text-[11px] text-[#64748b]">
+                        Loading latest offer details...
+                      </div>
+                    )}
+                    {detailsError && (
+                      <div className="rounded-2xl border border-[#fde2e2] bg-[#fff5f5] px-4 py-3 text-[11px] text-[#dc2626]">
+                        {detailsError}
+                      </div>
+                    )}
                     <section className="flex gap-4 rounded-2xl border border-[#e6ecf7] bg-white p-4">
                       <div className="grid h-16 w-20 place-items-center rounded-xl bg-[#f1f5f9] text-[18px] font-semibold text-[#1f3d8f]">
                         {detailsOffer.discount.replace(" OFF", "")}

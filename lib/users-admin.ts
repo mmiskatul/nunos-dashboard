@@ -61,11 +61,9 @@ function normalizeStatus(value: unknown): UserStatus {
   return String(value).toLowerCase() === "blocked" ? "BLOCKED" : "ACTIVE";
 }
 
-function avatarUrl(record: AnyRecord): string {
+function avatarUrl(record: AnyRecord): string | null {
   const explicit = asString(record.profile_image_url) || asString(record.avatar);
-  if (explicit) return explicit;
-  const identity = asString(record.id) || asString(record.email) || asString(record.full_name) || "user";
-  return `https://i.pravatar.cc/120?u=${encodeURIComponent(identity)}`;
+  return explicit || null;
 }
 
 function mapRecentBookings(record: AnyRecord): UserProfile["recentBookings"] {

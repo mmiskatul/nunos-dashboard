@@ -7,7 +7,7 @@ import { IoAlertCircle, IoShieldCheckmark, IoTimeOutline } from "react-icons/io5
 import { FaUsers } from "react-icons/fa";
 import { BsPatchCheckFill } from "react-icons/bs";
 
-type VendorStatus = "PENDING" | "APPROVED" | "REJECTED";
+type VendorStatus = "PENDING" | "APPROVED" | "REJECTED" | "BLOCKED";
 type VendorCategory = "HOSPITALITY" | "DINING" | "RENTALS";
 
 type VerificationDoc = {
@@ -33,9 +33,26 @@ type Vendor = {
   };
 };
 
+type VendorSummaryCard = { label: string; value: string; note: string; tone: string };
+
+const pageSize = 5;
+const vendorsRefreshIntervalMs = 30_000;
+
+function primaryVendorAction(status: VendorStatus): "approve" | "unblock" {
+  return status === "BLOCKED" ? "unblock" : "approve";
+}
+
+function primaryVendorActionLabel(status: VendorStatus) {
+  return status === "BLOCKED" ? "Unblock Vendor" : "Approve Vendor";
+}
+
+function primaryVendorActionAriaLabel(vendorName: string, status: VendorStatus) {
+  return `${status === "BLOCKED" ? "Unblock" : "Approve"} ${vendorName}`;
+}
+
 function vendorStatusClass(status: VendorStatus) {
   if (status === "APPROVED") return "bg-[#dcfce7] text-[#15803d]";
-  if (status === "REJECTED") return "bg-[#fee2e2] text-[#dc2626]";
+  if (status === "REJECTED" || status === "BLOCKED") return "bg-[#fee2e2] text-[#dc2626]";
   return "bg-[#fff4cc] text-[#b45309]";
 }
 
@@ -43,7 +60,7 @@ const summaryIconByLabel: Record<string, { Icon: typeof FaUsers; tone: string }>
   "Total Vendors": { Icon: FaUsers, tone: "bg-[#edf2fb] text-[#1f3d8f]" },
   "Pending Approval": { Icon: IoTimeOutline, tone: "bg-[#fff7e5] text-[#f59e0b]" },
   "Approved Vendors": { Icon: IoShieldCheckmark, tone: "bg-[#e8f8ef] text-[#2da772]" },
-  "Rejected Vendors": { Icon: IoAlertCircle, tone: "bg-[#feeeee] text-[#ef4444]" }
+  "Blocked Vendors": { Icon: IoAlertCircle, tone: "bg-[#feeeee] text-[#ef4444]" }
 };
 
 function safeImageSrc(src: string | null | undefined, fallbackSeed: string) {
@@ -51,25 +68,48 @@ function safeImageSrc(src: string | null | undefined, fallbackSeed: string) {
   return value || `https://i.pravatar.cc/120?u=${encodeURIComponent(fallbackSeed)}`;
 }
 
+async function fetchVendors(signal?: AbortSignal) {
+  const response = await fetch("/api/vendors", { signal });
+  if (!response.ok) {
+    throw new Error("Failed to load vendors");
+  }
+  return (await response.json()) as { summaryCards: VendorSummaryCard[]; vendors: Vendor[] };
+}
+
+function syncSummaryCards(baseCards: VendorSummaryCard[], vendors: Vendor[]) {
+  const total = vendors.length;
+  const pending = vendors.filter((vendor) => vendor.status === "PENDING").length;
+  const approved = vendors.filter((vendor) => vendor.status === "APPROVED").length;
+  const blocked = vendors.filter((vendor) => vendor.status === "BLOCKED").length;
+
+  return baseCards.map((card) => {
+    if (card.label === "Total Vendors") return { ...card, value: total.toLocaleString() };
+    if (card.label === "Pending Approval") return { ...card, value: pending.toLocaleString() };
+    if (card.label === "Approved Vendors") return { ...card, value: approved.toLocaleString() };
+    if (card.label === "Blocked Vendors") return { ...card, value: blocked.toLocaleString() };
+    return card;
+  });
+}
+
 export function VendorsManagementView({
   data
 }: {
-  data: { summaryCards: Array<{ label: string; value: string; note: string; tone: string }>; vendors: Vendor[] };
+  data: { summaryCards: VendorSummaryCard[]; vendors: Vendor[] };
 }) {
   const searchParams = useSearchParams();
   const statusParam = searchParams.get("status");
 
   const [vendors, setVendors] = useState<Vendor[]>(data.vendors);
+  const [baseSummaryCards, setBaseSummaryCards] = useState<VendorSummaryCard[]>(data.summaryCards);
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
   const [pendingVendorAction, setPendingVendorAction] = useState<{
     vendorId: string;
     vendorName: string;
-    action: "approve" | "block";
+    action: "approve" | "block" | "unblock";
   } | null>(null);
   const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"ALL" | VendorStatus>("ALL");
-  const pageSize = 5;
 
   const selectedVendor = useMemo(
     () => vendors.find((vendor) => vendor.id === selectedVendorId) ?? null,
@@ -77,7 +117,7 @@ export function VendorsManagementView({
   );
 
   useEffect(() => {
-    if (statusParam === "PENDING" || statusParam === "APPROVED" || statusParam === "REJECTED") {
+    if (statusParam === "PENDING" || statusParam === "APPROVED" || statusParam === "REJECTED" || statusParam === "BLOCKED") {
       setStatusFilter(statusParam);
       setPage(1);
     } else if (statusParam === "ALL") {
@@ -87,18 +127,8 @@ export function VendorsManagementView({
   }, [statusParam]);
 
   const summaryCards = useMemo(() => {
-    const total = vendors.length;
-    const pending = vendors.filter((vendor) => vendor.status === "PENDING").length;
-    const approved = vendors.filter((vendor) => vendor.status === "APPROVED").length;
-    const rejected = vendors.filter((vendor) => vendor.status === "REJECTED").length;
-    return data.summaryCards.map((card) => {
-      if (card.label === "Total Vendors") return { ...card, value: total.toLocaleString() };
-      if (card.label === "Pending Approval") return { ...card, value: pending.toLocaleString() };
-      if (card.label === "Approved Vendors") return { ...card, value: approved.toLocaleString() };
-      if (card.label === "Rejected Vendors") return { ...card, value: rejected.toLocaleString() };
-      return card;
-    });
-  }, [data.summaryCards, vendors]);
+    return syncSummaryCards(baseSummaryCards, vendors);
+  }, [baseSummaryCards, vendors]);
 
   const filteredVendors = useMemo(() => {
     if (statusFilter === "ALL") return vendors;
@@ -133,23 +163,89 @@ export function VendorsManagementView({
     return items;
   }, [currentPage, totalPages]);
 
-  async function updateVendorStatus(id: string, action: "approve" | "block") {
+  useEffect(() => {
+    const refreshVendors = async (signal?: AbortSignal) => {
+      try {
+        const payload = await fetchVendors(signal);
+        if (Array.isArray(payload.vendors)) {
+          setVendors(payload.vendors);
+        }
+        if (Array.isArray(payload.summaryCards)) {
+          setBaseSummaryCards(payload.summaryCards);
+        }
+      } catch (error) {
+        if ((error as { name?: string }).name !== "AbortError") {
+          return;
+        }
+      }
+    };
+
+    const controller = new AbortController();
+    void refreshVendors(controller.signal);
+
+    const intervalId = window.setInterval(() => {
+      void refreshVendors();
+    }, vendorsRefreshIntervalMs);
+
+    const handleWindowRefresh = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      void refreshVendors();
+    };
+
+    window.addEventListener("focus", handleWindowRefresh);
+    document.addEventListener("visibilitychange", handleWindowRefresh);
+
+    return () => {
+      controller.abort();
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowRefresh);
+      document.removeEventListener("visibilitychange", handleWindowRefresh);
+    };
+  }, []);
+
+  useEffect(() => {
+    setVendors(data.vendors);
+    setBaseSummaryCards(data.summaryCards);
+  }, [data.summaryCards, data.vendors]);
+
+  async function updateVendorStatus(id: string, action: "approve" | "block" | "unblock") {
+    const nextAction = action === "unblock" ? "approve" : action;
     try {
       const res = await fetch(`/api/vendors/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ action: nextAction })
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        throw new Error("Failed to update vendor");
+      }
+
       const payload = (await res.json()) as { vendor?: Vendor };
-      if (!payload.vendor) return;
-      setVendors((prev) => prev.map((vendor) => (vendor.id === payload.vendor?.id ? payload.vendor : vendor)));
+      if (payload.vendor) {
+        setVendors((prev) => prev.map((vendor) => (vendor.id === payload.vendor?.id ? payload.vendor : vendor)));
+      }
+
+      const refreshed = await fetchVendors();
+      if (Array.isArray(refreshed.vendors)) {
+        setVendors(refreshed.vendors);
+      }
+      if (Array.isArray(refreshed.summaryCards)) {
+        setBaseSummaryCards(refreshed.summaryCards);
+      }
     } catch {
-      // no-op for mock API
+      const refreshed = await fetchVendors().catch(() => null);
+      if (refreshed?.vendors) {
+        setVendors(refreshed.vendors);
+      }
+      if (refreshed?.summaryCards) {
+        setBaseSummaryCards(refreshed.summaryCards);
+      }
     }
   }
 
-  const requestVendorAction = (vendor: Vendor, action: "approve" | "block") => {
+  const requestVendorAction = (vendor: Vendor, action: "approve" | "block" | "unblock") => {
     setPendingVendorAction({
       vendorId: vendor.id,
       vendorName: vendor.businessName,
@@ -216,7 +312,7 @@ export function VendorsManagementView({
               </button>
               {filtersOpen && (
                 <div className="absolute right-5 top-14 z-10 w-40 rounded-lg border border-[#e6ecf7] bg-white p-2 text-[11px] text-[#3a4b70] shadow-sm">
-                  {(["ALL", "PENDING", "APPROVED", "REJECTED"] as const).map((status) => (
+                  {(["ALL", "PENDING", "APPROVED", "BLOCKED"] as const).map((status) => (
                     <button
                       key={status}
                       type="button"
@@ -323,9 +419,10 @@ export function VendorsManagementView({
                         </button>
                         <button
                           type="button"
-                          onClick={() => requestVendorAction(vendor, "approve")}
+                          onClick={() => requestVendorAction(vendor, primaryVendorAction(vendor.status))}
+                          disabled={vendor.status === "APPROVED"}
                           className="grid h-6 w-6 place-items-center rounded-full border border-[#d7f2e3] text-[#16a34a]"
-                          aria-label={`Approve ${vendor.businessName}`}
+                          aria-label={primaryVendorActionAriaLabel(vendor.businessName, vendor.status)}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                             <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
@@ -335,6 +432,7 @@ export function VendorsManagementView({
                         <button
                           type="button"
                           onClick={() => requestVendorAction(vendor, "block")}
+                          disabled={vendor.status === "BLOCKED"}
                           className="grid h-6 w-6 place-items-center rounded-full border border-[#fde2e2] text-[#ef4444]"
                           aria-label={`Block ${vendor.businessName}`}
                         >
@@ -437,7 +535,7 @@ export function VendorsManagementView({
                 />
                 <h3 className="m-0 mt-3 text-[16px] font-semibold text-[#1d2a43]">{selectedVendor.businessName}</h3>
                 <span className="mt-1 rounded-full bg-[#fff3d7] px-3 py-1 text-[9px] font-semibold text-[#b45309]">
-                  {selectedVendor.status === "APPROVED" ? "APPROVED" : selectedVendor.status === "REJECTED" ? "REJECTED" : "PENDING VERIFICATION"}
+                  {selectedVendor.status === "APPROVED" ? "APPROVED" : selectedVendor.status === "BLOCKED" ? "BLOCKED" : selectedVendor.status === "REJECTED" ? "REJECTED" : "PENDING VERIFICATION"}
                 </span>
               </div>
 
@@ -514,16 +612,18 @@ export function VendorsManagementView({
               <div className="flex flex-col gap-3">
                 <button
                   type="button"
-                  onClick={() => requestVendorAction(selectedVendor, "approve")}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#1f3d8f] text-[12px] font-semibold text-white shadow-[0_10px_20px_rgba(31,61,143,0.25)]"
+                  onClick={() => requestVendorAction(selectedVendor, primaryVendorAction(selectedVendor.status))}
+                  disabled={selectedVendor.status === "APPROVED"}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#1f3d8f] text-[12px] font-semibold text-white shadow-[0_10px_20px_rgba(31,61,143,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <BsPatchCheckFill size={18}/>
-                  Approve Vendor
+                  {primaryVendorActionLabel(selectedVendor.status)}
                 </button>
                 <button
                   type="button"
                   onClick={() => requestVendorAction(selectedVendor, "block")}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-full border border-[#fee2e2] bg-[#fff5f5] text-[12px] font-semibold text-[#ef4444]"
+                  disabled={selectedVendor.status === "BLOCKED"}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-full border border-[#fee2e2] bg-[#fff5f5] text-[12px] font-semibold text-[#ef4444] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <IoAlertCircle size={16} />
                   Block Vendor
@@ -538,12 +638,14 @@ export function VendorsManagementView({
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#0f172a]/45 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.25)]">
             <h3 className="m-0 text-[18px] font-semibold text-[#1d2a43]">
-              Confirm {pendingVendorAction.action === "approve" ? "Approval" : "Block"}
+              Confirm {pendingVendorAction.action === "block" ? "Block" : pendingVendorAction.action === "unblock" ? "Unblock" : "Approval"}
             </h3>
             <p className="m-0 mt-3 text-[13px] leading-6 text-[#60718f]">
               {pendingVendorAction.action === "approve"
                 ? `Approve ${pendingVendorAction.vendorName}? This vendor will be allowed to operate on the platform.`
-                : `Block ${pendingVendorAction.vendorName}? This vendor will be removed from active approval status.`}
+                : pendingVendorAction.action === "unblock"
+                  ? `Unblock ${pendingVendorAction.vendorName}? This vendor will regain access to operate on the platform.`
+                  : `Block ${pendingVendorAction.vendorName}? This vendor will lose access to operate on the platform.`}
             </p>
             <div className="mt-6 flex items-center justify-end gap-3">
               <button
@@ -557,7 +659,7 @@ export function VendorsManagementView({
                 type="button"
                 onClick={confirmVendorAction}
                 className={`inline-flex h-10 items-center rounded-xl px-4 text-[13px] font-semibold text-white ${
-                  pendingVendorAction.action === "approve" ? "bg-[#1f3d8f]" : "bg-[#dc2626]"
+                  pendingVendorAction.action === "block" ? "bg-[#dc2626]" : "bg-[#1f3d8f]"
                 }`}
               >
                 Confirm

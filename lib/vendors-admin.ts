@@ -1,6 +1,6 @@
 type AnyRecord = Record<string, unknown>;
 
-type VendorStatus = "PENDING" | "APPROVED" | "REJECTED";
+type VendorStatus = "PENDING" | "APPROVED" | "REJECTED" | "BLOCKED";
 type VendorCategory = "HOSPITALITY" | "DINING" | "RENTALS";
 
 export type DashboardVendor = {
@@ -36,6 +36,7 @@ function asNumber(value: unknown, fallback = 0): number {
 function normalizeStatus(value: unknown): VendorStatus {
   const status = String(value || "").toLowerCase();
   if (status === "approved") return "APPROVED";
+  if (status === "blocked") return "BLOCKED";
   if (status === "rejected") return "REJECTED";
   return "PENDING";
 }
@@ -115,12 +116,12 @@ export function buildVendorSummaryCards(vendors: DashboardVendor[]) {
   const total = vendors.length;
   const pending = vendors.filter((vendor) => vendor.status === "PENDING").length;
   const approved = vendors.filter((vendor) => vendor.status === "APPROVED").length;
-  const rejected = vendors.filter((vendor) => vendor.status === "REJECTED").length;
+  const blocked = vendors.filter((vendor) => vendor.status === "BLOCKED").length;
 
   return [
     { label: "Total Vendors", value: total.toLocaleString(), note: "All registered vendors", tone: "text-[#64748b]" },
     { label: "Pending Approval", value: pending.toLocaleString(), note: "Awaiting admin review", tone: "text-[#f59e0b]" },
     { label: "Approved Vendors", value: approved.toLocaleString(), note: "Currently approved", tone: "text-[#16a34a]" },
-    { label: "Rejected Vendors", value: rejected.toLocaleString(), note: "Need follow-up", tone: "text-[#ef4444]" },
+    { label: "Blocked Vendors", value: blocked.toLocaleString(), note: "Restricted by admin", tone: "text-[#ef4444]" },
   ];
 }

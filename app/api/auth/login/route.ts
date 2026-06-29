@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server";
-
-function getBackendBaseUrl() {
-  const value = process.env.NEXT_PUBLIC_AUTH_API_BASE?.trim();
-  if (!value) {
-    throw new Error("NEXT_PUBLIC_AUTH_API_BASE is not configured.");
-  }
-  return value.replace(/\/+$/, "");
-}
+import { backendUrl } from "@/app/api/backend-proxy";
 
 export async function POST(request: Request) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
   try {
     const body = await request.json();
     const email = String(body?.email ?? "").trim().toLowerCase();
@@ -18,11 +13,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "Email and password required." }, { status: 400 });
     }
 
-    const response = await fetch(`${getBackendBaseUrl()}/api/v1/platform-admin/auth/login`, {
+    const response = await fetch(backendUrl("/platform-admin/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email_or_phone: email, password }),
-      cache: "no-store"
+      cache: "no-store",
+      signal: controller.signal
     });
 
     const payload = (await response.json().catch(() => ({}))) as {
@@ -54,7 +50,12 @@ export async function POST(request: Request) {
       path: "/"
     });
     return nextResponse;
-  } catch {
-    return NextResponse.json({ ok: false, message: "Login failed." }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof DOMException && error.name === "AbortError"
+      ? "Authentication backend timed out."
+      : "Authentication backend unavailable.";
+    return NextResponse.json({ ok: false, message }, { status: 502 });
+  } finally {
+    clearTimeout(timeout);
   }
 }

@@ -3,6 +3,12 @@ import { fetchApiData } from "@/lib/server-api";
 
 type DataPayload = {
   summaryCards: Array<{ label: string; value: string; note: string; tone: string }>;
+  vendors: Array<{
+    id: string;
+    businessName: string;
+    category: "HOSPITALITY" | "DINING" | "RENTALS";
+    status: "PENDING" | "APPROVED" | "REJECTED" | "BLOCKED";
+  }>;
   offers: Array<{
     id: string;
     name: string;
@@ -15,6 +21,7 @@ type DataPayload = {
     startDate: string;
     endDate: string;
     discountValue: number;
+    selectedVendorIds: string[];
     providerCount: number;
     engagedUsers: number;
     providerBreakdown: Array<{
@@ -31,10 +38,30 @@ type DataPayload = {
 
 const fallbackData: DataPayload = {
   summaryCards: [],
+  vendors: [],
   offers: []
 };
 
 export async function OffersManagementViewServer() {
-  const data = await fetchApiData<DataPayload>("/api/offers", fallbackData);
-  return <OffersManagementView data={data} />;
+  const [offersData, vendorsData] = await Promise.all([
+    fetchApiData<Omit<DataPayload, "vendors">>("/api/offers", { summaryCards: [], offers: [] }),
+    fetchApiData<{
+      vendors: Array<{
+        id: string;
+        businessName: string;
+        category: "HOSPITALITY" | "DINING" | "RENTALS";
+        status: "PENDING" | "APPROVED" | "REJECTED" | "BLOCKED";
+      }>;
+    }>("/api/vendors", { vendors: [] }),
+  ]);
+
+  return (
+    <OffersManagementView
+      data={{
+        summaryCards: offersData.summaryCards,
+        offers: offersData.offers,
+        vendors: vendorsData.vendors,
+      }}
+    />
+  );
 }

@@ -12,6 +12,7 @@ export type DashboardOffer = {
   startDate: string;
   endDate: string;
   discountValue: number;
+  selectedVendorIds: string[];
   providerCount: number;
   engagedUsers: number;
   providerBreakdown: Array<{
@@ -74,6 +75,9 @@ export function mapAdminOffer(input: unknown): DashboardOffer {
     startDate: asString(record.starts_at),
     endDate: asString(record.ends_at),
     discountValue,
+    selectedVendorIds: Array.isArray(record.selected_vendor_ids)
+      ? record.selected_vendor_ids.map((value) => asString(value)).filter(Boolean)
+      : [],
     providerCount: asNumber(record.provider_count, 0),
     engagedUsers: asNumber(record.engaged_users, asNumber(record.redemptions, 0)),
     providerBreakdown: Array.isArray(record.provider_breakdown)

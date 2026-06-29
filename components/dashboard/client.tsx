@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -34,6 +34,21 @@ export type DashboardData = {
   vendors: Array<{ code: string; name: string; category: string; rating: string; revenue: string; status: string }>;
 };
 
+const EMPTY_DATA: DashboardData = {
+  stats: [],
+  monthlyData: [],
+  weeklyData: [],
+  bookingByRange: {
+    weekly: [],
+    monthly: []
+  },
+  bookingTotals: {
+    weekly: 0,
+    monthly: 0
+  },
+  vendors: []
+};
+
 const statsIconMap: Record<StatIcon, typeof FiTag> = {
   tag: FiTag,
   users: FiUsers,
@@ -63,34 +78,93 @@ function formatPercent(value: number) {
 }
 
 export function DashboardView({ data }: { data: DashboardData }) {
+  const [liveData, setLiveData] = useState<DashboardData>(data ?? EMPTY_DATA);
+  const [refreshing, setRefreshing] = useState(false);
   const [range, setRange] = useState<Range>("monthly");
   const [vendorPage, setVendorPage] = useState(1);
   const vendorPageSize = 10;
 
-  const revenueData = range === "weekly" ? data.weeklyData : data.monthlyData;
-  const pieData = (data.bookingByRange?.[range]) ?? [];
-  const bookingTotal = (data.bookingTotals?.[range]) ?? 0;
-  const vendorTotalPages = Math.max(1, Math.ceil((data.vendors?.length ?? 0) / vendorPageSize));
-  const pagedVendors = (data.vendors ?? []).slice((vendorPage - 1) * vendorPageSize, vendorPage * vendorPageSize);
+  useEffect(() => {
+    setLiveData(data ?? EMPTY_DATA);
+  }, [data]);
+
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    const refresh = async () => {
+      setRefreshing(true);
+      try {
+        const response = await fetch("/api/dashboard", {
+          cache: "no-store"
+        });
+        if (!response.ok) return;
+        const nextData = (await response.json()) as DashboardData;
+        if (active) {
+          setLiveData((prev) => ({
+            ...prev,
+            ...nextData,
+            bookingByRange: {
+              weekly: nextData.bookingByRange?.weekly ?? prev.bookingByRange.weekly,
+              monthly: nextData.bookingByRange?.monthly ?? prev.bookingByRange.monthly
+            },
+            bookingTotals: {
+              weekly: nextData.bookingTotals?.weekly ?? prev.bookingTotals.weekly,
+              monthly: nextData.bookingTotals?.monthly ?? prev.bookingTotals.monthly
+            }
+          }));
+        }
+      } catch {
+        // Keep the previous snapshot if the refresh fails.
+      } finally {
+        if (active) setRefreshing(false);
+      }
+    };
+
+    refresh();
+    timer = setInterval(refresh, 30000);
+
+    const handleFocus = () => {
+      void refresh();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      active = false;
+      if (timer) clearInterval(timer);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
+
+  const revenueData = range === "weekly" ? liveData.weeklyData : liveData.monthlyData;
+  const pieData = (liveData.bookingByRange?.[range]) ?? [];
+  const bookingTotal = (liveData.bookingTotals?.[range]) ?? 0;
+  const vendorTotalPages = Math.max(1, Math.ceil((liveData.vendors?.length ?? 0) / vendorPageSize));
+  const pagedVendors = (liveData.vendors ?? []).slice((vendorPage - 1) * vendorPageSize, vendorPage * vendorPageSize);
+
+  useEffect(() => {
+    setVendorPage(1);
+  }, [liveData.vendors.length]);
 
   return (
     <section className="space-y-4">
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-5">
-        {(data.stats ?? []).map((card) => {
+        {(liveData.stats ?? []).map((card) => {
           const CardIcon = statsIconMap[card.icon];
           return (
-          <article key={card.label} className="rounded-xl border border-[#dbe2ef] bg-white p-4">
-            <div className="flex items-center justify-between">
-              <div className="grid h-11 w-11 place-items-center rounded-full bg-[#eef2fb] text-[#27409b]">
-                <CardIcon size={23} strokeWidth={2.2} />
+            <article key={card.label} className="rounded-xl border border-[#dbe2ef] bg-white p-4">
+              <div className="flex items-center justify-between">
+                <div className="grid h-11 w-11 place-items-center rounded-full bg-[#eef2fb] text-[#27409b]">
+                  <CardIcon size={23} strokeWidth={2.2} />
+                </div>
+                <span className="text-[11px] font-semibold text-[#17a765]">~{card.trend}</span>
               </div>
-              <span className="text-[11px] font-semibold text-[#17a765]">~{card.trend}</span>
-            </div>
-            <p className="m-0 mt-4 text-[12px] tracking-[0.04em] text-[#7a88a6]">{card.label}</p>
-            <h3 className="m-0 mt-1 text-[42px] leading-none text-[#1f2b43]">{card.value}</h3>
-            <p className="m-0 mt-2 text-[10px] text-[#97a3bc]">{card.sub}</p>
-          </article>
-        );
+              <p className="m-0 mt-4 text-[12px] tracking-[0.04em] text-[#7a88a6]">{card.label}</p>
+              <h3 className="m-0 mt-1 text-[42px] leading-none text-[#1f2b43]">{card.value}</h3>
+              <p className="m-0 mt-2 text-[10px] text-[#97a3bc]">{card.sub}</p>
+            </article>
+          );
         })}
       </section>
 
@@ -201,10 +275,13 @@ export function DashboardView({ data }: { data: DashboardData }) {
         </div>
         <footer className="flex items-center justify-between px-4 py-3 text-[10px] text-[#8b96ad]">
           <span>
-            Showing {data.vendors.length === 0 ? 0 : (vendorPage - 1) * vendorPageSize + 1} to{" "}
-            {Math.min(vendorPage * vendorPageSize, data.vendors.length)} of {data.vendors.length} vendors
+            Showing {liveData.vendors.length === 0 ? 0 : (vendorPage - 1) * vendorPageSize + 1} to{" "}
+            {Math.min(vendorPage * vendorPageSize, liveData.vendors.length)} of {liveData.vendors.length} vendors
           </span>
           <div className="flex items-center gap-2">
+            <span className="mr-2 text-[10px] text-[#9aa6c0]">
+              {refreshing ? "Refreshing live data..." : "Live"}
+            </span>
             <button
               type="button"
               onClick={() => setVendorPage((prev) => Math.max(1, prev - 1))}

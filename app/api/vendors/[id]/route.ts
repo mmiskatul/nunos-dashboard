@@ -39,7 +39,8 @@ export async function PATCH(
   const body = (await request.json().catch(() => ({}))) as { action?: string };
   const decision =
     body.action === "approve" ? "approved" :
-    body.action === "reject" || body.action === "block" ? "rejected" :
+    body.action === "reject" ? "rejected" :
+    body.action === "block" ? "blocked" :
     null;
 
   if (!decision) {
@@ -51,10 +52,10 @@ export async function PATCH(
     const auth = resolveAuthHeader(request);
     if (auth) headers.Authorization = auth;
 
-    const response = await fetch(backendUrl(`/platform-admin/vendors/${id}/verification`), {
+    const response = await fetch(backendUrl(`/platform-admin/vendors/${id}/status`), {
       method: "PATCH",
       headers,
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ status: decision }),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {

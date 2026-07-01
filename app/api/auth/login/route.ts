@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       { ok: true, user: { email: payload.admin?.email ?? email } },
       { status: 200 }
     );
-    nextResponse.cookies.set("nunos_auth", "true", {
+    nextResponse.cookies.set("nunos_admin_auth", "true", {
       httpOnly: true,
       sameSite: "lax",
       path: "/"

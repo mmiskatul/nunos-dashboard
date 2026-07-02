@@ -23,6 +23,8 @@ export async function POST(request: Request) {
 
     const payload = (await response.json().catch(() => ({}))) as {
       access_token?: string;
+      refresh_token?: string;
+      session_token?: string;
       admin?: { email?: string };
       detail?: string;
       message?: string;
@@ -36,19 +38,33 @@ export async function POST(request: Request) {
     }
 
     const nextResponse = NextResponse.json(
-      { ok: true, user: { email: payload.admin?.email ?? email } },
+      {
+        ok: true,
+        user: { email: payload.admin?.email ?? email },
+        access_token: payload.access_token,
+        refresh_token: payload.refresh_token ?? payload.session_token,
+      },
       { status: 200 }
     );
     nextResponse.cookies.set("nunos_admin_auth", "true", {
       httpOnly: true,
       sameSite: "lax",
-      path: "/"
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
     });
     nextResponse.cookies.set("nunos_dashboard_access_token", payload.access_token, {
       httpOnly: true,
       sameSite: "lax",
       path: "/"
     });
+    if (payload.refresh_token || payload.session_token) {
+      nextResponse.cookies.set("nunos_dashboard_refresh_token", payload.refresh_token ?? payload.session_token ?? "", {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 30,
+      });
+    }
     return nextResponse;
   } catch (error) {
     const message = error instanceof DOMException && error.name === "AbortError"

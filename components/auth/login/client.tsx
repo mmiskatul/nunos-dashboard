@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FiEye, FiEyeOff, FiLock, FiMail } from "react-icons/fi";
 import { login } from "@/components/auth/auth-client";
+import { saveAdminToken } from "@/lib/admin-api";
 
 export function LoginView() {
   const router = useRouter();
@@ -25,6 +26,9 @@ export function LoginView() {
     if (!result.ok) {
       setError(result.message ?? "Login failed.");
       return;
+    }
+    if (result.data?.access_token) {
+      saveAdminToken(result.data.access_token, result.data.refresh_token);
     }
     router.push(nextUrl);
   };

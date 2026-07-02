@@ -206,6 +206,8 @@ function VerifyCodeInner() {
 
       const registerResult = await postJson<{
         access_token: string;
+        refresh_token?: string;
+        session_token?: string;
         vendor?: { status?: string };
       }>("/vendor/auth/register", {
         ...pending,
@@ -213,6 +215,12 @@ function VerifyCodeInner() {
       });
 
       localStorage.setItem("vendor_access_token", registerResult.access_token);
+      if (registerResult.refresh_token || registerResult.session_token) {
+        localStorage.setItem(
+          "vendor_refresh_token",
+          registerResult.refresh_token ?? registerResult.session_token ?? "",
+        );
+      }
       sessionStorage.removeItem("pending_vendor_registration");
       router.push("/dashboard");
     } catch (error) {

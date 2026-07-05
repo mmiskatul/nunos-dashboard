@@ -1,6 +1,3 @@
-import { Suspense } from "react";
-import { VendorsManagementViewServer } from "@/components/vendors/server";
-
 function VendorsPageSkeleton() {
   return (
     <section className="space-y-6">
@@ -105,10 +102,6 @@ function VendorsPageSkeleton() {
   );
 }
 
-export default function VendorsPage() {
-  return (
-    <Suspense fallback={<VendorsPageSkeleton />}>
-      <VendorsManagementViewServer />
-    </Suspense>
-  );
+export default function Loading() {
+  return <VendorsPageSkeleton />;
 }

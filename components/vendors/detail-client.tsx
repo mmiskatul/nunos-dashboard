@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { DashboardVendor, VendorVerificationDocument } from "@/lib/vendors-admin";
+import { VendorDetailSkeleton } from "@/components/vendors/detail-skeleton";
 
 const refreshIntervalMs = 30_000;
 
@@ -388,11 +389,7 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
   );
 
   if (loading && !vendor) {
-    return (
-      <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center rounded-[28px] border border-[#e6ecf7] bg-white/90">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#1f3d8f] border-t-transparent" />
-      </div>
-    );
+    return <VendorDetailSkeleton />;
   }
 
   if (error && !vendor) {
@@ -412,11 +409,7 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
   }
 
   if (!vendor) {
-    return (
-      <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center rounded-[28px] border border-[#e6ecf7] bg-white/90">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#1f3d8f] border-t-transparent" />
-      </div>
-    );
+    return <VendorDetailSkeleton />;
   }
 
   return (

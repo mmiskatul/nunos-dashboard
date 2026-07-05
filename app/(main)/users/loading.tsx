@@ -1,6 +1,3 @@
-import { Suspense } from "react";
-import { UsersServer } from "@/components/users/server";
-
 function UsersPageSkeleton() {
   return (
     <section className="space-y-4">
@@ -99,10 +96,6 @@ function UsersPageSkeleton() {
   );
 }
 
-export default function UsersPage() {
-  return (
-    <Suspense fallback={<UsersPageSkeleton />}>
-      <UsersServer />
-    </Suspense>
-  );
+export default function Loading() {
+  return <UsersPageSkeleton />;
 }

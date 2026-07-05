@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   FiDownload,
@@ -149,6 +151,7 @@ export function UsersManagementUI({
   setShowAllBookings,
   persistUserAction
 }: UsersManagementUIProps) {
+  const router = useRouter();
   const [pendingStatusAction, setPendingStatusAction] = useState<{
     userId: string;
     userName: string;
@@ -169,6 +172,10 @@ export function UsersManagementUI({
     }
     persistUserAction(pendingStatusAction.userId, pendingStatusAction.action);
     setPendingStatusAction(null);
+  };
+
+  const openUserDetails = (userId: string) => {
+    router.push(`/users/${userId}`);
   };
 
   const exportCsv = () => {
@@ -316,7 +323,10 @@ export function UsersManagementUI({
               </thead>
               <tbody>
                 {pagedUsers.map((user: UserProfile, index: number) => (
-                  <tr key={`${user.id || user.email || user.name}-${index}`} className={index % 2 === 1 ? "bg-[#fbfcff]" : ""}>
+                  <tr
+                    key={`${user.id || user.email || user.name}-${index}`}
+                    className={index % 2 === 1 ? "bg-[#fbfcff]" : ""}
+                  >
                     <td className="border-b border-[#edf1fa] px-4 py-4 text-[12px] text-[#9aa6c0] ">{user.id}</td>
                     <td className="border-b border-[#edf1fa] px-4 py-4">
                       <div className="flex items-center gap-2.5">
@@ -327,7 +337,12 @@ export function UsersManagementUI({
                           size={28}
                         />
                         <div>
-                          <div className="text-[13px] font-semibold text-[#1f2d46]">{user.name}</div>
+                          <Link
+                            href={`/users/${user.id}`}
+                            className="text-[13px] font-semibold text-[#1f2d46] hover:text-[#1f3d8f] hover:underline"
+                          >
+                            {user.name}
+                          </Link>
                           <div className="text-[11px] text-[#7f8ea9]">{user.email}</div>
                         </div>
                       </div>
@@ -341,7 +356,10 @@ export function UsersManagementUI({
                       <div className="flex items-center gap-4 text-sm">
                         <button
                           type="button"
-                          onClick={() => setSelectedUserId(user.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openUserDetails(user.id);
+                          }}
                           className="text-[#294f99]"
                           aria-label={`View ${user.name} profile`}
                         >
@@ -349,7 +367,8 @@ export function UsersManagementUI({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation();
                             requestStatusAction(user);
                           }}
                           className={user.status === "BLOCKED" ? "text-[#16a34a]" : "text-[#ef4444]"}

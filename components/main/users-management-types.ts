@@ -20,6 +20,9 @@ export type UserProfile = {
   joinedDate: string;
   memberSince: string;
   age: number;
+  createdAt: string;
+  updatedAt: string;
+  pointsBalance: number;
   stats: {
     bookings: number;
     spent: string;

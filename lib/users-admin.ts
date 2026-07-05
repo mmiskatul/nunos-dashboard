@@ -46,7 +46,16 @@ function asString(value: unknown, fallback = ""): string {
 }
 
 function asNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return fallback;
 }
 
 function formatCurrency(value: number): string {
@@ -62,7 +71,7 @@ function normalizeStatus(value: unknown): UserStatus {
 }
 
 function avatarUrl(record: AnyRecord): string | null {
-  const explicit = asString(record.profile_image_url) || asString(record.avatar);
+  const explicit = asString(record.profile_image_url);
   return explicit || null;
 }
 
@@ -75,7 +84,7 @@ function mapRecentBookings(record: AnyRecord): UserProfile["recentBookings"] {
       range: asString(booking.range, "Scheduled"),
       amount: formatCurrency(asNumber(booking.amount, 0)),
       status: asString(booking.status, "PENDING"),
-      image: asString(booking.image, `https://picsum.photos/seed/booking-${index}/80/80`),
+      image: asString(booking.image),
     };
   });
 }
@@ -102,6 +111,9 @@ export function mapAdminUserToProfile(input: unknown): UserProfile {
     joinedDate: asString(record.joined_date, "Unknown"),
     memberSince: asString(record.member_since, "Unknown"),
     age: asNumber(record.age, 0),
+    createdAt: asString(record.created_at),
+    updatedAt: asString(record.updated_at),
+    pointsBalance: asNumber(record.points_balance, 0),
     stats: {
       bookings: totalBookings,
       spent: formatCurrency(totalSpent),

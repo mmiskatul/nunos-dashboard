@@ -60,7 +60,6 @@ function FieldLabel({ children }: { children: ReactNode }) {
 
 export function SettingsView({ data }: { data: SettingsData }) {
   const [platformName, setPlatformName] = useState(data.general.platformName);
-  const [supportEmail, setSupportEmail] = useState(data.general.supportEmail);
   const [brandLogoData, setBrandLogoData] = useState(data.general.brandIdentity.logoData ?? "");
   const [globalRate, setGlobalRate] = useState(data.commission.globalRate);
   const [categoryRate, setCategoryRate] = useState(data.commission.categoryRate);
@@ -81,7 +80,6 @@ export function SettingsView({ data }: { data: SettingsData }) {
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const generalSnapshot = useRef({
     platformName: data.general.platformName,
-    supportEmail: data.general.supportEmail,
     logoData: data.general.brandIdentity.logoData ?? ""
   });
   const profileSnapshot = useRef({
@@ -140,7 +138,6 @@ export function SettingsView({ data }: { data: SettingsData }) {
   const commitGeneralSettings = async () => {
     if (
       platformName === generalSnapshot.current.platformName &&
-      supportEmail === generalSnapshot.current.supportEmail &&
       brandLogoData === generalSnapshot.current.logoData
     ) {
       return;
@@ -150,7 +147,6 @@ export function SettingsView({ data }: { data: SettingsData }) {
       {
         general: {
           platformName,
-          supportEmail,
           brandIdentity: {
             logoData: brandLogoData,
             note: data.general.brandIdentity.note,
@@ -164,7 +160,6 @@ export function SettingsView({ data }: { data: SettingsData }) {
     if (ok) {
       generalSnapshot.current = {
         platformName,
-        supportEmail,
         logoData: brandLogoData
       };
     }
@@ -209,7 +204,6 @@ export function SettingsView({ data }: { data: SettingsData }) {
         {
           general: {
             platformName,
-            supportEmail,
             brandIdentity: {
               logoData: result,
               note: data.general.brandIdentity.note,
@@ -223,7 +217,6 @@ export function SettingsView({ data }: { data: SettingsData }) {
       if (ok) {
         generalSnapshot.current = {
           platformName,
-          supportEmail,
           logoData: result
         };
       }
@@ -410,9 +403,10 @@ export function SettingsView({ data }: { data: SettingsData }) {
                   <FieldLabel>Support Email</FieldLabel>
                   <input
                     type="email"
-                    value={supportEmail}
-                    onChange={(event) => setSupportEmail(event.target.value)}
-                    className={inputClass}
+                    value={data.general.supportEmail}
+                    disabled
+                    readOnly
+                    className={`${inputClass} cursor-not-allowed bg-[#f3f6fb] text-[#7b879c]`}
                   />
                 </div>
               </div>

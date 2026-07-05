@@ -132,6 +132,10 @@ function isImageDocument(url: string) {
   return /\.(png|jpe?g|webp|gif|bmp|svg)(\?|#|$)/i.test(url);
 }
 
+function isPdfDocument(url: string) {
+  return /\.pdf(\?|#|$)/i.test(url);
+}
+
 async function fetchVendors(signal?: AbortSignal) {
   const response = await fetch("/api/vendors", { signal });
   if (!response.ok) {
@@ -165,66 +169,144 @@ function syncSummaryCards(baseCards: VendorSummaryCard[], vendors: DashboardVend
 }
 
 function DocumentsGrid({ docs }: { docs: VendorVerificationDocument[] }) {
+  const [activeDoc, setActiveDoc] = useState<VendorVerificationDocument | null>(null);
+  const [zoom, setZoom] = useState(1);
+
   if (docs.length === 0) {
     return <p className="mt-2 text-[11px] text-[#8b96ad]">No verification documents uploaded.</p>;
   }
 
   return (
-    <div className="mt-3 grid grid-cols-1 gap-3">
-      {docs.map((doc) => (
-        <a
-          key={`${doc.title}-${doc.url}`}
-          href={doc.url}
-          target="_blank"
-          rel="noreferrer"
-          className="overflow-hidden rounded-2xl border border-[#e6ecf7] bg-white transition hover:border-[#bfd0f7] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
-        >
-          <div className="grid gap-0">
-            {isImageDocument(doc.url) ? (
-              <div className="bg-[linear-gradient(135deg,#eff6ff,#f8fafc)] p-3">
-                <img
-                  src={doc.url}
-                  alt={doc.title}
-                  className="h-40 w-full rounded-xl border border-[#dde7f5] object-cover"
-                />
-              </div>
-            ) : (
-              <div className="grid h-32 place-items-center bg-[linear-gradient(135deg,#eff6ff,#f8fafc)] text-[#6b7b99]">
-                <div className="text-center">
-                  <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white shadow-sm">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                      <path d="M7 4h7l4 4v12H7V4Z" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M14 4v4h4" stroke="currentColor" strokeWidth="1.6" />
-                    </svg>
-                  </div>
-                  <p className="m-0 mt-3 text-[11px] font-semibold">Open document</p>
+    <>
+      <div className="mt-3 grid grid-cols-1 gap-3">
+        {docs.map((doc) => (
+          <button
+            key={`${doc.title}-${doc.url}`}
+            type="button"
+            onClick={() => {
+              setActiveDoc(doc);
+              setZoom(1);
+            }}
+            className="overflow-hidden rounded-2xl border border-[#e6ecf7] bg-white text-left transition hover:border-[#bfd0f7] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
+          >
+            <div className="grid gap-0">
+              {isImageDocument(doc.url) ? (
+                <div className="bg-[linear-gradient(135deg,#eff6ff,#f8fafc)] p-3">
+                  <img
+                    src={doc.url}
+                    alt={doc.title}
+                    className="h-40 w-full rounded-xl border border-[#dde7f5] object-cover"
+                  />
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="grid h-32 place-items-center bg-[linear-gradient(135deg,#eff6ff,#f8fafc)] text-[#6b7b99]">
+                  <div className="text-center">
+                    <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white shadow-sm">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                        <path d="M7 4h7l4 4v12H7V4Z" stroke="currentColor" strokeWidth="1.6" />
+                        <path d="M14 4v4h4" stroke="currentColor" strokeWidth="1.6" />
+                      </svg>
+                    </div>
+                    <p className="m-0 mt-3 text-[11px] font-semibold">Open document</p>
+                  </div>
+                </div>
+              )}
 
-            <div className="flex items-start justify-between gap-3 p-3">
-              <div className="min-w-0">
-                <p className="m-0 text-[11px] font-semibold text-[#1f2d46]">{doc.title}</p>
-                <p className="m-0 mt-1 text-[10px] text-[#7b89a3]">
-                  {isImageDocument(doc.url) ? "Image preview available" : "Document preview not embedded"}
-                </p>
+              <div className="flex items-start justify-between gap-3 p-3">
+                <div className="min-w-0">
+                  <p className="m-0 text-[11px] font-semibold text-[#1f2d46]">{doc.title}</p>
+                  <p className="m-0 mt-1 text-[10px] text-[#7b89a3]">
+                    {isImageDocument(doc.url) ? "Image preview available" : "Open inside dashboard"}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold ${
+                    doc.status === "Verified"
+                      ? "bg-[#dcfce7] text-[#15803d]"
+                      : doc.status === "Rejected"
+                        ? "bg-[#fee2e2] text-[#dc2626]"
+                        : "bg-[#fff4cc] text-[#b45309]"
+                  }`}
+                >
+                  {doc.status}
+                </span>
               </div>
-              <span
-                className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold ${
-                  doc.status === "Verified"
-                    ? "bg-[#dcfce7] text-[#15803d]"
-                    : doc.status === "Rejected"
-                      ? "bg-[#fee2e2] text-[#dc2626]"
-                      : "bg-[#fff4cc] text-[#b45309]"
-                }`}
-              >
-                {doc.status}
-              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {activeDoc ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f172a]/70 p-4">
+          <div className="flex h-[min(88vh,900px)] w-[min(92vw,1100px)] flex-col overflow-hidden rounded-[28px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.32)]">
+            <div className="flex items-center justify-between border-b border-[#e6ecf7] px-5 py-4">
+              <div>
+                <h4 className="m-0 text-[16px] font-semibold text-[#1d2a43]">{activeDoc.title}</h4>
+                <p className="m-0 mt-1 text-[11px] text-[#7b89a3]">Document preview inside dashboard</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {isImageDocument(activeDoc.url) ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setZoom((current) => Math.max(0.5, current - 0.25))}
+                      className="rounded-xl border border-[#dbe2ef] px-3 py-2 text-[12px] font-semibold text-[#4e5f83]"
+                    >
+                      -
+                    </button>
+                    <span className="min-w-14 text-center text-[12px] font-semibold text-[#4e5f83]">
+                      {Math.round(zoom * 100)}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setZoom((current) => Math.min(3, current + 0.25))}
+                      className="rounded-xl border border-[#dbe2ef] px-3 py-2 text-[12px] font-semibold text-[#4e5f83]"
+                    >
+                      +
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setActiveDoc(null)}
+                  className="rounded-xl bg-[#1f3d8f] px-4 py-2 text-[12px] font-semibold text-white"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto bg-[linear-gradient(180deg,#f8fbff_0%,#eef4fb_100%)] p-5">
+              {isImageDocument(activeDoc.url) ? (
+                <div className="flex min-h-full items-center justify-center">
+                  <img
+                    src={activeDoc.url}
+                    alt={activeDoc.title}
+                    className="max-w-none rounded-2xl border border-[#dbe2ef] bg-white shadow-[0_14px_40px_rgba(15,23,42,0.12)]"
+                    style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+                  />
+                </div>
+              ) : isPdfDocument(activeDoc.url) ? (
+                <iframe
+                  src={activeDoc.url}
+                  title={activeDoc.title}
+                  className="h-full min-h-[640px] w-full rounded-2xl border border-[#dbe2ef] bg-white"
+                />
+              ) : (
+                <div className="flex h-full min-h-[420px] items-center justify-center">
+                  <div className="max-w-md rounded-3xl border border-[#dbe2ef] bg-white p-8 text-center">
+                    <p className="m-0 text-[16px] font-semibold text-[#1d2a43]">Preview unavailable</p>
+                    <p className="m-0 mt-3 text-[13px] leading-6 text-[#60718f]">
+                      This document type cannot be embedded in the viewer yet.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </a>
-      ))}
-    </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 

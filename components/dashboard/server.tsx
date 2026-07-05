@@ -13,7 +13,7 @@ type DataPayload = {
     weekly: number;
     monthly: number;
   };
-  vendors: Array<{ code: string; name: string; category: string; rating: string; revenue: string; status: string }>;
+  vendors: Array<{ id: string; code: string; name: string; category: string; rating: string; revenue: string; status: string }>;
 };
 
 const fallbackData: DataPayload = {

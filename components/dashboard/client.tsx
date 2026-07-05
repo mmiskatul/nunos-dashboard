@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   Bar,
@@ -31,7 +32,7 @@ export type DashboardData = {
   weeklyData: Array<{ period: string; value: number }>;
   bookingByRange: Record<Range, Array<{ name: string; value: number; color: string }>>;
   bookingTotals: Record<Range, number>;
-  vendors: Array<{ code: string; name: string; category: string; rating: string; revenue: string; status: string }>;
+  vendors: Array<{ id: string; code: string; name: string; category: string; rating: string; revenue: string; status: string }>;
 };
 
 const EMPTY_DATA: DashboardData = {
@@ -238,7 +239,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
       <section className="rounded-xl border border-[#dbe2ef] bg-white p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="m-0 text-[34px] font-semibold text-[#1f2b43]">Vendor Performance Snapshot</h3>
-          <a href="#" className="text-[13px] font-semibold text-[#2648a0]">View All Vendors</a>
+          <Link href="/vendors" className="text-[13px] font-semibold text-[#2648a0]">View All Vendors</Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[920px] border-collapse text-[14px]">
@@ -253,12 +254,15 @@ export function DashboardView({ data }: { data: DashboardData }) {
             </thead>
             <tbody>
               {pagedVendors.map((vendor, i) => (
-                <tr key={`${vendor.code}-${vendor.name}-${i}`} className={i % 2 === 1 ? "bg-[#fbfcff]" : ""}>
+                <tr key={`${vendor.id}-${vendor.code}-${i}`} className={i % 2 === 1 ? "bg-[#fbfcff]" : ""}>
                   <td className="border-b border-[#edf1fa] px-4 py-4">
-                    <div className="flex items-center gap-3">
+                    <Link
+                      href={`/vendors/${vendor.id}`}
+                      className="flex items-center gap-3 hover:opacity-85"
+                    >
                       <span className="grid h-7 w-7 place-items-center rounded bg-[#edf2fb] text-[11px] font-semibold text-[#415a91]">{vendor.code}</span>
-                      <strong className="text-[#1f2b43]">{vendor.name}</strong>
-                    </div>
+                      <strong className="text-[#1f2b43] hover:text-[#2648a0]">{vendor.name}</strong>
+                    </Link>
                   </td>
                   <td className="border-b border-[#edf1fa] px-4 py-4 text-[#6f7e98]">{vendor.category}</td>
                   <td className="border-b border-[#edf1fa] px-4 py-4">

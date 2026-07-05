@@ -15,6 +15,13 @@ function primaryVendorActionLabel(status: DashboardVendor["status"]) {
   return status === "BLOCKED" ? "Unblock" : "Approve";
 }
 
+function reviewActionTitle(action: "approve" | "block" | "unblock" | "cancel") {
+  if (action === "block") return "Block";
+  if (action === "unblock") return "Unblock";
+  if (action === "cancel") return "Cancel Review";
+  return "Approval";
+}
+
 function vendorInitials(vendor: DashboardVendor) {
   const source = vendor.businessName || vendor.owner || vendor.id;
   return source
@@ -49,7 +56,14 @@ function formatDate(value: string) {
   if (!value) return "N/A";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
 }
 
 function statusLabel(value: string) {
@@ -66,18 +80,35 @@ function sectionEntries(section: Record<string, unknown>) {
   });
 }
 
-function displayValue(value: unknown) {
+function looksLikeDateField(key: string) {
+  const normalized = key.toLowerCase();
+  return (
+    normalized.endsWith("_at") ||
+    normalized.includes("date") ||
+    normalized.includes("time") ||
+    normalized.includes("sync")
+  );
+}
+
+function displayValue(key: string, value: unknown) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item)).join(", ");
   }
   if (typeof value === "boolean") {
     return value ? "Yes" : "No";
   }
+  if (typeof value === "string" && looksLikeDateField(key)) {
+    return formatDate(value);
+  }
   return String(value);
 }
 
 function isImageDocument(url: string) {
   return /\.(png|jpe?g|webp|gif|bmp|svg)(\?|#|$)/i.test(url);
+}
+
+function isPdfDocument(url: string) {
+  return /\.pdf(\?|#|$)/i.test(url);
 }
 
 function stars(rating: number) {
@@ -101,67 +132,145 @@ function stars(rating: number) {
 }
 
 function DocumentsGrid({ docs }: { docs: VendorVerificationDocument[] }) {
+  const [activeDoc, setActiveDoc] = useState<VendorVerificationDocument | null>(null);
+  const [zoom, setZoom] = useState(1);
+
   if (docs.length === 0) {
     return <p className="text-[13px] text-[#8b96ad]">No verification documents uploaded.</p>;
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {docs.map((doc) => (
-        <a
-          key={`${doc.title}-${doc.url}`}
-          href={doc.url}
-          target="_blank"
-          rel="noreferrer"
-          className="overflow-hidden rounded-3xl border border-[#e6ecf7] bg-white transition hover:border-[#bfd0f7] hover:shadow-[0_14px_30px_rgba(15,23,42,0.08)]"
-        >
-          <div>
-            {isImageDocument(doc.url) ? (
-              <div className="bg-[linear-gradient(135deg,#edf5ff,#f8fafc)] p-4">
-                <img
-                  src={doc.url}
-                  alt={doc.title}
-                  className="h-52 w-full rounded-2xl border border-[#dde7f5] object-cover"
-                />
-              </div>
-            ) : (
-              <div className="grid h-52 place-items-center bg-[linear-gradient(135deg,#edf5ff,#f8fafc)] text-[#6b7b99]">
-                <div className="text-center">
-                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white shadow-sm">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-                      <path d="M7 4h7l4 4v12H7V4Z" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M14 4v4h4" stroke="currentColor" strokeWidth="1.6" />
-                    </svg>
-                  </div>
-                  <p className="m-0 mt-3 text-[12px] font-semibold">Open document</p>
-                  <p className="m-0 mt-1 text-[11px] text-[#8b96ad]">Preview unavailable</p>
+    <>
+      <div className="grid gap-4 md:grid-cols-2">
+        {docs.map((doc) => (
+          <button
+            key={`${doc.title}-${doc.url}`}
+            type="button"
+            onClick={() => {
+              setActiveDoc(doc);
+              setZoom(1);
+            }}
+            className="overflow-hidden rounded-3xl border border-[#e6ecf7] bg-white text-left transition hover:border-[#bfd0f7] hover:shadow-[0_14px_30px_rgba(15,23,42,0.08)]"
+          >
+            <div>
+              {isImageDocument(doc.url) ? (
+                <div className="bg-[linear-gradient(135deg,#edf5ff,#f8fafc)] p-4">
+                  <img
+                    src={doc.url}
+                    alt={doc.title}
+                    className="h-52 w-full rounded-2xl border border-[#dde7f5] object-cover"
+                  />
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="grid h-52 place-items-center bg-[linear-gradient(135deg,#edf5ff,#f8fafc)] text-[#6b7b99]">
+                  <div className="text-center">
+                    <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white shadow-sm">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                        <path d="M7 4h7l4 4v12H7V4Z" stroke="currentColor" strokeWidth="1.6" />
+                        <path d="M14 4v4h4" stroke="currentColor" strokeWidth="1.6" />
+                      </svg>
+                    </div>
+                    <p className="m-0 mt-3 text-[12px] font-semibold">Open document</p>
+                    <p className="m-0 mt-1 text-[11px] text-[#8b96ad]">Preview inside dashboard</p>
+                  </div>
+                </div>
+              )}
 
-            <div className="flex items-start justify-between gap-3 p-4">
-              <div className="min-w-0">
-                <p className="m-0 text-[13px] font-semibold text-[#1f2d46]">{doc.title}</p>
-                <p className="m-0 mt-2 text-[11px] text-[#7b89a3]">
-                  {isImageDocument(doc.url) ? "Embedded image preview" : "Tap to open file"}
-                </p>
+              <div className="flex items-start justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <p className="m-0 text-[13px] font-semibold text-[#1f2d46]">{doc.title}</p>
+                  <p className="m-0 mt-2 text-[11px] text-[#7b89a3]">
+                    {isImageDocument(doc.url) ? "Tap to zoom" : "Tap to preview"}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                    doc.status === "Verified"
+                      ? "bg-[#dcfce7] text-[#15803d]"
+                      : doc.status === "Rejected"
+                        ? "bg-[#fee2e2] text-[#dc2626]"
+                        : "bg-[#fff4cc] text-[#b45309]"
+                  }`}
+                >
+                  {doc.status}
+                </span>
               </div>
-              <span
-                className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
-                  doc.status === "Verified"
-                    ? "bg-[#dcfce7] text-[#15803d]"
-                    : doc.status === "Rejected"
-                      ? "bg-[#fee2e2] text-[#dc2626]"
-                      : "bg-[#fff4cc] text-[#b45309]"
-                }`}
-              >
-                {doc.status}
-              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {activeDoc ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f172a]/70 p-4">
+          <div className="flex h-[min(88vh,900px)] w-[min(92vw,1180px)] flex-col overflow-hidden rounded-[32px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.32)]">
+            <div className="flex items-center justify-between border-b border-[#e6ecf7] px-5 py-4">
+              <div>
+                <h4 className="m-0 text-[16px] font-semibold text-[#1d2a43]">{activeDoc.title}</h4>
+                <p className="m-0 mt-1 text-[11px] text-[#7b89a3]">Document preview inside dashboard</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {isImageDocument(activeDoc.url) ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setZoom((current) => Math.max(0.5, current - 0.25))}
+                      className="rounded-xl border border-[#dbe2ef] px-3 py-2 text-[12px] font-semibold text-[#4e5f83]"
+                    >
+                      -
+                    </button>
+                    <span className="min-w-14 text-center text-[12px] font-semibold text-[#4e5f83]">
+                      {Math.round(zoom * 100)}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setZoom((current) => Math.min(3, current + 0.25))}
+                      className="rounded-xl border border-[#dbe2ef] px-3 py-2 text-[12px] font-semibold text-[#4e5f83]"
+                    >
+                      +
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setActiveDoc(null)}
+                  className="rounded-xl bg-[#1f3d8f] px-4 py-2 text-[12px] font-semibold text-white"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto bg-[linear-gradient(180deg,#f8fbff_0%,#eef4fb_100%)] p-5">
+              {isImageDocument(activeDoc.url) ? (
+                <div className="flex min-h-full items-center justify-center">
+                  <img
+                    src={activeDoc.url}
+                    alt={activeDoc.title}
+                    className="max-w-none rounded-2xl border border-[#dbe2ef] bg-white shadow-[0_14px_40px_rgba(15,23,42,0.12)]"
+                    style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+                  />
+                </div>
+              ) : isPdfDocument(activeDoc.url) ? (
+                <iframe
+                  src={activeDoc.url}
+                  title={activeDoc.title}
+                  className="h-full min-h-[680px] w-full rounded-2xl border border-[#dbe2ef] bg-white"
+                />
+              ) : (
+                <div className="flex h-full min-h-[420px] items-center justify-center">
+                  <div className="max-w-md rounded-3xl border border-[#dbe2ef] bg-white p-8 text-center">
+                    <p className="m-0 text-[16px] font-semibold text-[#1d2a43]">Preview unavailable</p>
+                    <p className="m-0 mt-3 text-[13px] leading-6 text-[#60718f]">
+                      This document type cannot be embedded yet, but it remains inside the dashboard flow.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </a>
-      ))}
-    </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -178,7 +287,7 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
   const [vendor, setVendor] = useState<DashboardVendor | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<"approve" | "block" | "unblock" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"approve" | "block" | "unblock" | "cancel" | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
 
   const loadVendor = async (signal?: AbortSignal) => {
@@ -313,7 +422,7 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
           href="/vendors"
           className="inline-flex h-10 items-center rounded-xl border border-[#dbe2ef] px-4 text-[13px] font-medium text-[#4e5f83]"
         >
-          Cancel
+          Back
         </Link>
       </div>
 
@@ -403,12 +512,14 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
             >
               Block
             </button>
-            <Link
-              href="/vendors"
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-[#dbe2ef] px-5 text-[13px] font-medium text-[#4e5f83]"
+            <button
+              type="button"
+              onClick={() => setPendingAction("cancel")}
+              disabled={vendor.status === "PENDING" || actionBusy}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-[#dbe2ef] bg-white px-5 text-[13px] font-medium text-[#4e5f83] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Cancel
-            </Link>
+              Cancel Review
+            </button>
           </div>
         </div>
       </section>
@@ -443,7 +554,7 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
                       {key.replaceAll("_", " ")}
                     </p>
                     <p className="m-0 mt-2 break-words text-[13px] leading-6 text-[#1f2d46]">
-                      {displayValue(value)}
+                      {displayValue(key, value)}
                     </p>
                   </div>
                 ))}
@@ -510,7 +621,7 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
                       {key.replaceAll("_", " ")}
                     </p>
                     <p className="m-0 mt-2 break-words text-[13px] leading-6 text-[#1f2d46]">
-                      {displayValue(value)}
+                      {displayValue(key, value)}
                     </p>
                   </div>
                 ))}
@@ -524,14 +635,16 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#0f172a]/45 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.25)]">
             <h3 className="m-0 text-[18px] font-semibold text-[#1d2a43]">
-              Confirm {pendingAction === "block" ? "Block" : pendingAction === "unblock" ? "Unblock" : "Approval"}
+              Confirm {reviewActionTitle(pendingAction)}
             </h3>
             <p className="m-0 mt-3 text-[13px] leading-6 text-[#60718f]">
               {pendingAction === "approve"
                 ? `Approve ${vendor.businessName}? This vendor will be allowed to operate on the platform.`
                 : pendingAction === "unblock"
                   ? `Unblock ${vendor.businessName}? This vendor will regain access to operate on the platform.`
-                  : `Block ${vendor.businessName}? This vendor will lose access to operate on the platform.`}
+                  : pendingAction === "cancel"
+                    ? `Cancel the current review for ${vendor.businessName}? This will move the vendor back to pending review.`
+                    : `Block ${vendor.businessName}? This vendor will lose access to operate on the platform.`}
             </p>
             <div className="mt-6 flex items-center justify-end gap-3">
               <button
@@ -547,7 +660,7 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
                 onClick={submitAction}
                 disabled={actionBusy}
                 className={`inline-flex h-10 items-center rounded-xl px-4 text-[13px] font-semibold text-white disabled:opacity-50 ${
-                  pendingAction === "block" ? "bg-[#dc2626]" : "bg-[#1f3d8f]"
+                  pendingAction === "block" ? "bg-[#dc2626]" : pendingAction === "cancel" ? "bg-[#64748b]" : "bg-[#1f3d8f]"
                 }`}
               >
                 {actionBusy ? "Saving..." : "Confirm"}

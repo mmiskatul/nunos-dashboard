@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Bar,
@@ -79,10 +80,12 @@ function formatPercent(value: number) {
 }
 
 export function DashboardView({ data }: { data: DashboardData }) {
+  const router = useRouter();
   const [liveData, setLiveData] = useState<DashboardData>(data ?? EMPTY_DATA);
   const [refreshing, setRefreshing] = useState(false);
   const [range, setRange] = useState<Range>("monthly");
   const [vendorPage, setVendorPage] = useState(1);
+  const [navigatingVendorId, setNavigatingVendorId] = useState<string | null>(null);
   const vendorPageSize = 10;
 
   useEffect(() => {
@@ -147,6 +150,13 @@ export function DashboardView({ data }: { data: DashboardData }) {
   useEffect(() => {
     setVendorPage(1);
   }, [liveData.vendors.length]);
+
+  const openVendorDetails = (vendorId: string) => {
+    setNavigatingVendorId(vendorId);
+    window.requestAnimationFrame(() => {
+      router.push(`/vendors/${vendorId}`);
+    });
+  };
 
   return (
     <section className="space-y-4">
@@ -256,13 +266,14 @@ export function DashboardView({ data }: { data: DashboardData }) {
               {pagedVendors.map((vendor, i) => (
                 <tr key={`${vendor.id}-${vendor.code}-${i}`} className={i % 2 === 1 ? "bg-[#fbfcff]" : ""}>
                   <td className="border-b border-[#edf1fa] px-4 py-4">
-                    <Link
-                      href={`/vendors/${vendor.id}`}
+                    <button
+                      type="button"
+                      onClick={() => openVendorDetails(vendor.id)}
                       className="flex items-center gap-3 hover:opacity-85"
                     >
                       <span className="grid h-7 w-7 place-items-center rounded bg-[#edf2fb] text-[11px] font-semibold text-[#415a91]">{vendor.code}</span>
                       <strong className="text-[#1f2b43] hover:text-[#2648a0]">{vendor.name}</strong>
-                    </Link>
+                    </button>
                   </td>
                   <td className="border-b border-[#edf1fa] px-4 py-4 text-[#6f7e98]">{vendor.category}</td>
                   <td className="border-b border-[#edf1fa] px-4 py-4">
@@ -339,6 +350,12 @@ export function DashboardView({ data }: { data: DashboardData }) {
           </div>
         </footer>
       </section>
+
+      {navigatingVendorId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#1f3d8f] border-t-transparent" />
+        </div>
+      ) : null}
     </section>
   );
 }

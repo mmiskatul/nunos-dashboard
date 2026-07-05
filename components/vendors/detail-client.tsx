@@ -276,25 +276,32 @@ function DocumentsGrid({ docs }: { docs: VendorVerificationDocument[] }) {
 
 async function fetchVendorDetail(id: string, signal?: AbortSignal) {
   const response = await fetch(`/api/vendors/${encodeURIComponent(id)}`, { signal });
+  if (response.status === 404) {
+    return { vendor: null, notFound: true };
+  }
   if (!response.ok) {
     throw new Error("Failed to load vendor details");
   }
   const payload = (await response.json()) as { vendor?: DashboardVendor };
-  return payload.vendor ?? null;
+  return { vendor: payload.vendor ?? null, notFound: false };
 }
 
 export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
   const [vendor, setVendor] = useState<DashboardVendor | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [pendingAction, setPendingAction] = useState<"approve" | "block" | "unblock" | "cancel" | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
 
   const loadVendor = async (signal?: AbortSignal) => {
+    setLoading(true);
     setError(null);
+    setNotFound(false);
     try {
-      const detail = await fetchVendorDetail(vendorId, signal);
-      setVendor(detail);
+      const result = await fetchVendorDetail(vendorId, signal);
+      setVendor(result.vendor);
+      setNotFound(result.notFound);
     } catch (loadError) {
       if ((loadError as { name?: string }).name !== "AbortError") {
         setError("Failed to load live vendor details.");
@@ -382,8 +389,8 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
 
   if (loading && !vendor) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#1f3d8f] border-t-transparent" />
+      <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center rounded-[28px] border border-[#e6ecf7] bg-white/90">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#1f3d8f] border-t-transparent" />
       </div>
     );
   }
@@ -396,10 +403,18 @@ export function VendorDetailPageClient({ vendorId }: { vendorId: string }) {
     );
   }
 
-  if (!vendor) {
+  if (notFound) {
     return (
       <div className="rounded-3xl border border-[#e6ecf7] bg-white p-6 text-[#60718f]">
         Vendor not found.
+      </div>
+    );
+  }
+
+  if (!vendor) {
+    return (
+      <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center rounded-[28px] border border-[#e6ecf7] bg-white/90">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#1f3d8f] border-t-transparent" />
       </div>
     );
   }

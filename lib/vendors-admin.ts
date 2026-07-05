@@ -48,7 +48,16 @@ function asString(value: unknown, fallback = ""): string {
 }
 
 function asNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = Number(value);
+    if (Number.isFinite(normalized)) {
+      return normalized;
+    }
+  }
+  return fallback;
 }
 
 function normalizeStatus(value: unknown): VendorStatus {
@@ -60,7 +69,9 @@ function normalizeStatus(value: unknown): VendorStatus {
 }
 
 function normalizeCategory(value: unknown): VendorCategory {
-  const category = String(value || "").toLowerCase();
+  const category = Array.isArray(value)
+    ? value.map((item) => String(item || "")).find(Boolean)?.toLowerCase() ?? ""
+    : String(value || "").toLowerCase();
   if (category.includes("dining") || category.includes("restaurant") || category.includes("food")) return "DINING";
   if (category.includes("hotel") || category.includes("hospitality")) return "HOSPITALITY";
   return "RENTALS";
@@ -155,10 +166,21 @@ export function mapVendorListItem(input: unknown): DashboardVendor {
     id: asString(record.id),
     businessName,
     owner,
-    category: normalizeCategory(record.category || verification.category || business.category),
-    bookings: asNumber(record.total_bookings, 0),
+    category: normalizeCategory(
+      record.category ||
+      record.categories ||
+      record.primary_category ||
+      verification.category ||
+      business.category,
+    ),
+    bookings: asNumber(record.total_bookings ?? record.bookings, 0),
     rating,
-    status: normalizeStatus(record.status || verification.status || adminReview.review_status),
+    status: normalizeStatus(
+      record.status ||
+      record.kyc_status ||
+      verification.status ||
+      adminReview.review_status,
+    ),
     avatar:
       asString(record.logo_url) ||
       asString(business.logo_url) ||

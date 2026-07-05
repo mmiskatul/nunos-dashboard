@@ -1,7 +1,13 @@
 type AnyRecord = Record<string, unknown>;
 
-type VendorStatus = "PENDING" | "APPROVED" | "REJECTED" | "BLOCKED";
-type VendorCategory = "HOSPITALITY" | "DINING" | "RENTALS";
+export type VendorStatus = "PENDING" | "APPROVED" | "REJECTED" | "BLOCKED";
+export type VendorCategory = "HOSPITALITY" | "DINING" | "RENTALS";
+
+export type VendorVerificationDocument = {
+  title: string;
+  url: string;
+  status: "Verified" | "Rejected" | "Pending";
+};
 
 export type DashboardVendor = {
   id: string;
@@ -12,12 +18,24 @@ export type DashboardVendor = {
   rating: number;
   status: VendorStatus;
   avatar: string;
+  email: string;
+  phone: string;
+  createdAt: string;
+  updatedAt: string;
   verification: {
     description: string;
     address: string;
     reviewScore: number;
     reviewCount: number;
-    docs: Array<{ title: string; state: "Verified" | "Rejected" }>;
+    status: string;
+    rejectionReason: string;
+    docs: VendorVerificationDocument[];
+  };
+  sections: {
+    profile: AnyRecord;
+    business: AnyRecord;
+    verification: AnyRecord;
+    adminReview: AnyRecord;
   };
 };
 
@@ -48,59 +66,137 @@ function normalizeCategory(value: unknown): VendorCategory {
   return "RENTALS";
 }
 
-function fallbackAvatar(identity: string) {
-  return `https://i.pravatar.cc/120?u=${encodeURIComponent(identity)}`;
+function cleanSection(section: AnyRecord) {
+  const cleaned = { ...section };
+  delete cleaned._id;
+  delete cleaned.vendor_id;
+  return cleaned;
 }
 
-function mapDocs(verification: AnyRecord): Array<{ title: string; state: "Verified" | "Rejected" }> {
-  const docs: Array<{ title: string; state: "Verified" | "Rejected" }> = [];
-  if (asString(verification.trade_license_document_url)) {
-    docs.push({ title: "Trade License", state: "Verified" });
+function composeAddress(...parts: unknown[]) {
+  return parts
+    .map((part) => asString(part).trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function inferDocumentStatus(value: unknown): "Verified" | "Rejected" | "Pending" {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "approved" || normalized === "verified") return "Verified";
+  if (normalized === "blocked" || normalized === "rejected") return "Rejected";
+  return "Pending";
+}
+
+function mapDocs(
+  verification: AnyRecord,
+  adminReview: AnyRecord,
+): VendorVerificationDocument[] {
+  const docs: VendorVerificationDocument[] = [];
+  const documentStatus = inferDocumentStatus(
+    verification.status || adminReview.review_status,
+  );
+
+  const tradeLicenseUrl = asString(verification.trade_license_document_url);
+  if (tradeLicenseUrl) {
+    docs.push({ title: "Trade License", url: tradeLicenseUrl, status: documentStatus });
   }
-  if (asString(verification.owner_manager_id_document_url)) {
-    docs.push({ title: "Owner ID", state: "Verified" });
+
+  const ownerIdUrl = asString(verification.owner_manager_id_document_url);
+  if (ownerIdUrl) {
+    docs.push({ title: "Owner / Manager ID", url: ownerIdUrl, status: documentStatus });
   }
+
   const urls = Array.isArray(verification.document_urls) ? verification.document_urls : [];
-  urls.forEach((_, index) => {
-    docs.push({ title: `Document ${index + 1}`, state: "Verified" });
+  urls.forEach((value, index) => {
+    const url = asString(value);
+    if (url) {
+      docs.push({ title: `Verification Document ${index + 1}`, url, status: documentStatus });
+    }
   });
-  if (docs.length === 0) {
-    docs.push({ title: "No document uploaded", state: "Rejected" });
-  }
+
   return docs;
 }
 
 export function mapVendorListItem(input: unknown): DashboardVendor {
   const record = asRecord(input);
   const sections = asRecord(record.sections);
-  const profile = asRecord(sections.profile);
-  const business = asRecord(sections.business);
-  const verification = asRecord(sections.verification);
-  const businessName = asString(record.business_name, "Unknown Vendor");
-  const identity = asString(record.id) || businessName;
+  const profile = cleanSection(asRecord(sections.profile));
+  const business = cleanSection(asRecord(sections.business));
+  const verification = cleanSection(asRecord(sections.verification));
+  const adminReview = cleanSection(asRecord(sections.admin_review));
+
+  const businessName =
+    asString(record.business_name) ||
+    asString(profile.business_name) ||
+    asString(business.business_name) ||
+    "Unknown Vendor";
+  const owner =
+    asString(record.owner_full_name) ||
+    asString(profile.owner_full_name) ||
+    asString(profile.contact_person_name) ||
+    "Unknown Owner";
   const rating = asNumber(record.average_rating, 0);
+  const address =
+    composeAddress(
+      business.address,
+      business.city,
+      business.state,
+      business.country,
+    ) ||
+    composeAddress(
+      profile.address,
+      profile.city,
+      profile.state,
+      profile.country,
+    ) ||
+    "Address unavailable";
 
   return {
     id: asString(record.id),
     businessName,
-    owner: asString(record.owner_full_name) || asString(profile.owner_full_name, "Unknown Owner"),
-    category: normalizeCategory(record.category || verification.category),
+    owner,
+    category: normalizeCategory(record.category || verification.category || business.category),
     bookings: asNumber(record.total_bookings, 0),
     rating,
-    status: normalizeStatus(record.status),
-    avatar: asString(record.logo_url) || fallbackAvatar(identity),
+    status: normalizeStatus(record.status || verification.status || adminReview.review_status),
+    avatar:
+      asString(record.logo_url) ||
+      asString(business.logo_url) ||
+      asString(profile.logo_url),
+    email:
+      asString(record.email) ||
+      asString(profile.email) ||
+      asString(profile.email_address),
+    phone:
+      asString(record.phone) ||
+      asString(profile.phone) ||
+      asString(profile.phone_number),
+    createdAt: asString(record.created_at),
+    updatedAt: asString(record.updated_at),
     verification: {
       description:
         asString(business.business_description) ||
         asString(profile.business_description) ||
         "Vendor description unavailable.",
-      address:
-        asString(business.address) ||
-        [asString(business.city), asString(profile.city)].filter(Boolean).join(", ") ||
-        "Address unavailable",
+      address,
       reviewScore: rating,
       reviewCount: asNumber(record.total_reviews, 0),
-      docs: mapDocs(verification),
+      status:
+        asString(verification.status) ||
+        asString(adminReview.review_status) ||
+        asString(record.kyc_status) ||
+        "pending_review",
+      rejectionReason:
+        asString(adminReview.rejection_reason) ||
+        asString(verification.rejection_reason) ||
+        asString(record.kyc_rejection_reason),
+      docs: mapDocs(verification, adminReview),
+    },
+    sections: {
+      profile,
+      business,
+      verification,
+      adminReview,
     },
   };
 }
@@ -109,7 +205,15 @@ export function mapVendorDetailPayload(input: unknown): DashboardVendor {
   const payload = asRecord(input);
   const vendor = asRecord(payload.vendor);
   const sections = asRecord(payload.sections);
-  return mapVendorListItem({ ...vendor, sections });
+  return mapVendorListItem({
+    ...vendor,
+    sections: {
+      profile: asRecord(sections.profile),
+      business: asRecord(sections.business),
+      verification: asRecord(sections.verification),
+      admin_review: asRecord(sections.admin_review),
+    },
+  });
 }
 
 export function buildVendorSummaryCards(vendors: DashboardVendor[]) {

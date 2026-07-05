@@ -1,42 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { IoAlertCircle, IoShieldCheckmark, IoTimeOutline } from "react-icons/io5";
-import { FaUsers } from "react-icons/fa";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BsPatchCheckFill } from "react-icons/bs";
-
-type VendorStatus = "PENDING" | "APPROVED" | "REJECTED" | "BLOCKED";
-type VendorCategory = "HOSPITALITY" | "DINING" | "RENTALS";
-
-type VerificationDoc = {
-  title: string;
-  state: "Verified" | "Rejected";
-};
-
-type Vendor = {
-  id: string;
-  businessName: string;
-  owner: string;
-  category: VendorCategory;
-  bookings: number;
-  rating: number;
-  status: VendorStatus;
-  avatar: string;
-  verification: {
-    description: string;
-    address: string;
-    reviewScore: number;
-    reviewCount: number;
-    docs: VerificationDoc[];
-  };
-};
+import { FaUsers } from "react-icons/fa";
+import { IoAlertCircle, IoShieldCheckmark, IoTimeOutline } from "react-icons/io5";
+import type {
+  DashboardVendor,
+  VendorCategory,
+  VendorStatus,
+  VendorVerificationDocument,
+} from "@/lib/vendors-admin";
 
 type VendorSummaryCard = { label: string; value: string; note: string; tone: string };
 
 const pageSize = 5;
 const vendorsRefreshIntervalMs = 30_000;
+const drawerDefaultWidth = 420;
+const drawerMinWidth = 380;
+const drawerMaxWidth = 1100;
 
 function primaryVendorAction(status: VendorStatus): "approve" | "unblock" {
   return status === "BLOCKED" ? "unblock" : "approve";
@@ -60,12 +44,92 @@ const summaryIconByLabel: Record<string, { Icon: typeof FaUsers; tone: string }>
   "Total Vendors": { Icon: FaUsers, tone: "bg-[#edf2fb] text-[#1f3d8f]" },
   "Pending Approval": { Icon: IoTimeOutline, tone: "bg-[#fff7e5] text-[#f59e0b]" },
   "Approved Vendors": { Icon: IoShieldCheckmark, tone: "bg-[#e8f8ef] text-[#2da772]" },
-  "Blocked Vendors": { Icon: IoAlertCircle, tone: "bg-[#feeeee] text-[#ef4444]" }
+  "Blocked Vendors": { Icon: IoAlertCircle, tone: "bg-[#feeeee] text-[#ef4444]" },
 };
 
-function safeImageSrc(src: string | null | undefined, fallbackSeed: string) {
-  const value = typeof src === "string" ? src.trim() : "";
-  return value || `https://i.pravatar.cc/120?u=${encodeURIComponent(fallbackSeed)}`;
+function vendorInitials(vendor: DashboardVendor) {
+  const source = vendor.businessName || vendor.owner || vendor.id;
+  return source
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "VN";
+}
+
+function renderAvatar(vendor: DashboardVendor, sizeClass: string) {
+  if (vendor.avatar) {
+    return (
+      <Image
+        src={vendor.avatar}
+        alt={vendor.businessName}
+        width={80}
+        height={80}
+        className={`${sizeClass} rounded object-cover`}
+      />
+    );
+  }
+
+  return (
+    <div className={`grid ${sizeClass} place-items-center rounded bg-[#edf2fb] text-[12px] font-semibold text-[#415a91]`}>
+      {vendorInitials(vendor)}
+    </div>
+  );
+}
+
+function formatDate(value: string) {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function statusLabel(value: string) {
+  if (!value) return "Pending";
+  return value.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function stars(rating: number) {
+  const rounded = Math.max(0, Math.min(5, Math.round(rating)));
+  return Array.from({ length: 5 }, (_, index) => (
+    <svg
+      key={`star-${index}`}
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill={index < rounded ? "currentColor" : "none"}
+      className={index < rounded ? "text-[#f59e0b]" : "text-[#d7deea]"}
+    >
+      <path
+        d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.1 5.9-.9L12 3.5Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+    </svg>
+  ));
+}
+
+function sectionEntries(section: Record<string, unknown>) {
+  return Object.entries(section).filter(([, value]) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim().length > 0;
+    if (Array.isArray(value)) return value.length > 0;
+    return true;
+  });
+}
+
+function displayValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item)).join(", ");
+  }
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+  return String(value);
+}
+
+function isImageDocument(url: string) {
+  return /\.(png|jpe?g|webp|gif|bmp|svg)(\?|#|$)/i.test(url);
 }
 
 async function fetchVendors(signal?: AbortSignal) {
@@ -73,10 +137,19 @@ async function fetchVendors(signal?: AbortSignal) {
   if (!response.ok) {
     throw new Error("Failed to load vendors");
   }
-  return (await response.json()) as { summaryCards: VendorSummaryCard[]; vendors: Vendor[] };
+  return (await response.json()) as { summaryCards: VendorSummaryCard[]; vendors: DashboardVendor[] };
 }
 
-function syncSummaryCards(baseCards: VendorSummaryCard[], vendors: Vendor[]) {
+async function fetchVendorDetail(id: string, signal?: AbortSignal) {
+  const response = await fetch(`/api/vendors/${encodeURIComponent(id)}`, { signal });
+  if (!response.ok) {
+    throw new Error("Failed to load vendor details");
+  }
+  const payload = (await response.json()) as { vendor?: DashboardVendor };
+  return payload.vendor ?? null;
+}
+
+function syncSummaryCards(baseCards: VendorSummaryCard[], vendors: DashboardVendor[]) {
   const total = vendors.length;
   const pending = vendors.filter((vendor) => vendor.status === "PENDING").length;
   const approved = vendors.filter((vendor) => vendor.status === "APPROVED").length;
@@ -91,17 +164,84 @@ function syncSummaryCards(baseCards: VendorSummaryCard[], vendors: Vendor[]) {
   });
 }
 
+function DocumentsGrid({ docs }: { docs: VendorVerificationDocument[] }) {
+  if (docs.length === 0) {
+    return <p className="mt-2 text-[11px] text-[#8b96ad]">No verification documents uploaded.</p>;
+  }
+
+  return (
+    <div className="mt-3 grid grid-cols-1 gap-3">
+      {docs.map((doc) => (
+        <a
+          key={`${doc.title}-${doc.url}`}
+          href={doc.url}
+          target="_blank"
+          rel="noreferrer"
+          className="overflow-hidden rounded-2xl border border-[#e6ecf7] bg-white transition hover:border-[#bfd0f7] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
+        >
+          <div className="grid gap-0">
+            {isImageDocument(doc.url) ? (
+              <div className="bg-[linear-gradient(135deg,#eff6ff,#f8fafc)] p-3">
+                <img
+                  src={doc.url}
+                  alt={doc.title}
+                  className="h-40 w-full rounded-xl border border-[#dde7f5] object-cover"
+                />
+              </div>
+            ) : (
+              <div className="grid h-32 place-items-center bg-[linear-gradient(135deg,#eff6ff,#f8fafc)] text-[#6b7b99]">
+                <div className="text-center">
+                  <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white shadow-sm">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                      <path d="M7 4h7l4 4v12H7V4Z" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M14 4v4h4" stroke="currentColor" strokeWidth="1.6" />
+                    </svg>
+                  </div>
+                  <p className="m-0 mt-3 text-[11px] font-semibold">Open document</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-start justify-between gap-3 p-3">
+              <div className="min-w-0">
+                <p className="m-0 text-[11px] font-semibold text-[#1f2d46]">{doc.title}</p>
+                <p className="m-0 mt-1 text-[10px] text-[#7b89a3]">
+                  {isImageDocument(doc.url) ? "Image preview available" : "Document preview not embedded"}
+                </p>
+              </div>
+              <span
+                className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold ${
+                  doc.status === "Verified"
+                    ? "bg-[#dcfce7] text-[#15803d]"
+                    : doc.status === "Rejected"
+                      ? "bg-[#fee2e2] text-[#dc2626]"
+                      : "bg-[#fff4cc] text-[#b45309]"
+                }`}
+              >
+                {doc.status}
+              </span>
+            </div>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+}
+
 export function VendorsManagementView({
-  data
+  data,
 }: {
-  data: { summaryCards: VendorSummaryCard[]; vendors: Vendor[] };
+  data: { summaryCards: VendorSummaryCard[]; vendors: DashboardVendor[] };
 }) {
   const searchParams = useSearchParams();
   const statusParam = searchParams.get("status");
 
-  const [vendors, setVendors] = useState<Vendor[]>(data.vendors);
+  const [vendors, setVendors] = useState<DashboardVendor[]>(data.vendors);
   const [baseSummaryCards, setBaseSummaryCards] = useState<VendorSummaryCard[]>(data.summaryCards);
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
+  const [selectedVendorDetail, setSelectedVendorDetail] = useState<DashboardVendor | null>(null);
+  const [selectedVendorLoading, setSelectedVendorLoading] = useState(false);
+  const [selectedVendorError, setSelectedVendorError] = useState<string | null>(null);
   const [pendingVendorAction, setPendingVendorAction] = useState<{
     vendorId: string;
     vendorName: string;
@@ -110,11 +250,66 @@ export function VendorsManagementView({
   const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"ALL" | VendorStatus>("ALL");
+  const [drawerWidth, setDrawerWidth] = useState(drawerDefaultWidth);
+  const [isDraggingDrawer, setIsDraggingDrawer] = useState(false);
+  const dragFrameRef = useRef<number | null>(null);
 
-  const selectedVendor = useMemo(
+  const selectedVendorFallback = useMemo(
     () => vendors.find((vendor) => vendor.id === selectedVendorId) ?? null,
-    [selectedVendorId, vendors]
+    [selectedVendorId, vendors],
   );
+  const selectedVendor = selectedVendorDetail ?? selectedVendorFallback;
+
+  useEffect(() => {
+    if (!selectedVendorId) {
+      setDrawerWidth(drawerDefaultWidth);
+    }
+  }, [selectedVendorId]);
+
+  useEffect(() => {
+    if (!isDraggingDrawer) {
+      return;
+    }
+
+    const updateWidth = (clientX: number) => {
+      if (dragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFrameRef.current);
+      }
+
+      dragFrameRef.current = window.requestAnimationFrame(() => {
+        const viewportWidth = window.innerWidth;
+        const nextWidth = Math.min(
+          drawerMaxWidth,
+          Math.max(drawerMinWidth, viewportWidth - clientX),
+        );
+        setDrawerWidth(nextWidth);
+      });
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      updateWidth(event.clientX);
+    };
+
+    const stopDragging = () => {
+      setIsDraggingDrawer(false);
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopDragging);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopDragging);
+      if (dragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
+    };
+  }, [isDraggingDrawer]);
 
   useEffect(() => {
     if (statusParam === "PENDING" || statusParam === "APPROVED" || statusParam === "REJECTED" || statusParam === "BLOCKED") {
@@ -126,9 +321,7 @@ export function VendorsManagementView({
     }
   }, [statusParam]);
 
-  const summaryCards = useMemo(() => {
-    return syncSummaryCards(baseSummaryCards, vendors);
-  }, [baseSummaryCards, vendors]);
+  const summaryCards = useMemo(() => syncSummaryCards(baseSummaryCards, vendors), [baseSummaryCards, vendors]);
 
   const filteredVendors = useMemo(() => {
     if (statusFilter === "ALL") return vendors;
@@ -210,21 +403,65 @@ export function VendorsManagementView({
     setBaseSummaryCards(data.summaryCards);
   }, [data.summaryCards, data.vendors]);
 
+  useEffect(() => {
+    if (!selectedVendorId) {
+      setSelectedVendorDetail(null);
+      setSelectedVendorError(null);
+      setSelectedVendorLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadSelectedVendor = async (signal?: AbortSignal) => {
+      setSelectedVendorLoading(true);
+      setSelectedVendorError(null);
+      try {
+        const vendor = await fetchVendorDetail(selectedVendorId, signal);
+        setSelectedVendorDetail(vendor);
+      } catch (error) {
+        if ((error as { name?: string }).name !== "AbortError") {
+          setSelectedVendorError("Failed to load live vendor details.");
+        }
+      } finally {
+        setSelectedVendorLoading(false);
+      }
+    };
+
+    void loadSelectedVendor(controller.signal);
+
+    const intervalId = window.setInterval(() => {
+      void loadSelectedVendor();
+    }, vendorsRefreshIntervalMs);
+
+    const handleWindowRefresh = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      void loadSelectedVendor();
+    };
+
+    window.addEventListener("focus", handleWindowRefresh);
+    document.addEventListener("visibilitychange", handleWindowRefresh);
+
+    return () => {
+      controller.abort();
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowRefresh);
+      document.removeEventListener("visibilitychange", handleWindowRefresh);
+    };
+  }, [selectedVendorId]);
+
   async function updateVendorStatus(id: string, action: "approve" | "block" | "unblock") {
     const nextAction = action === "unblock" ? "approve" : action;
     try {
       const res = await fetch(`/api/vendors/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: nextAction })
+        body: JSON.stringify({ action: nextAction }),
       });
       if (!res.ok) {
         throw new Error("Failed to update vendor");
-      }
-
-      const payload = (await res.json()) as { vendor?: Vendor };
-      if (payload.vendor) {
-        setVendors((prev) => prev.map((vendor) => (vendor.id === payload.vendor?.id ? payload.vendor : vendor)));
       }
 
       const refreshed = await fetchVendors();
@@ -233,6 +470,10 @@ export function VendorsManagementView({
       }
       if (Array.isArray(refreshed.summaryCards)) {
         setBaseSummaryCards(refreshed.summaryCards);
+      }
+      if (selectedVendorId === id) {
+        const detail = await fetchVendorDetail(id).catch(() => null);
+        setSelectedVendorDetail(detail);
       }
     } catch {
       const refreshed = await fetchVendors().catch(() => null);
@@ -245,7 +486,7 @@ export function VendorsManagementView({
     }
   }
 
-  const requestVendorAction = (vendor: Vendor, action: "approve" | "block" | "unblock") => {
+  const requestVendorAction = (vendor: DashboardVendor, action: "approve" | "block" | "unblock") => {
     setPendingVendorAction({
       vendorId: vendor.id,
       vendorName: vendor.businessName,
@@ -300,18 +541,8 @@ export function VendorsManagementView({
                 </svg>
                 Filter
               </button>
-              <button
-                type="button"
-                className="inline-flex h-8 items-center gap-2 rounded-lg border border-[#e6ecf7] bg-white px-3 text-[11px] text-[#3a4b70]"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 3v12m0 0 4-4m-4 4-4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  <path d="M4 17v3h16v-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-                Export
-              </button>
               {filtersOpen && (
-                <div className="absolute right-5 top-14 z-10 w-40 rounded-lg border border-[#e6ecf7] bg-white p-2 text-[11px] text-[#3a4b70] shadow-sm">
+                <div className="absolute right-0 top-14 z-10 w-40 rounded-lg border border-[#e6ecf7] bg-white p-2 text-[11px] text-[#3a4b70] shadow-sm">
                   {(["ALL", "PENDING", "APPROVED", "BLOCKED"] as const).map((status) => (
                     <button
                       key={status}
@@ -334,7 +565,7 @@ export function VendorsManagementView({
           </div>
 
           <div className="overflow-x-auto px-4">
-            <table className="w-full min-w-[880px] border-collapse text-[15px]">
+            <table className="w-full min-w-[980px] border-collapse text-[15px]">
               <thead>
                 <tr>
                   {[
@@ -345,7 +576,7 @@ export function VendorsManagementView({
                     "BOOKINGS",
                     "RATING",
                     "STATUS",
-                    "ACTIONS"
+                    "ACTIONS",
                   ].map((head) => (
                     <th
                       key={head}
@@ -362,42 +593,30 @@ export function VendorsManagementView({
                     <td className="border-b border-[#edf1fa] px-4 py-4 text-[11px] font-semibold text-[#2d3f62]">{vendor.id}</td>
                     <td className="border-b border-[#edf1fa] px-4 py-4">
                       <div className="flex items-center gap-3">
-                        <Image
-                          src={safeImageSrc(vendor.avatar, vendor.id || vendor.businessName)}
-                          alt={vendor.businessName}
-                          width={26}
-                          height={26}
-                          className="h-7 w-7 rounded object-cover"
-                        />
-                        <span className="text-[12px] font-semibold text-[#1f2d46]">{vendor.businessName}</span>
+                        {renderAvatar(vendor, "h-7 w-7")}
+                        <div className="min-w-0">
+                          <Link
+                            href={`/vendors/${vendor.id}`}
+                            className="block truncate text-[12px] font-semibold text-[#1f2d46] hover:text-[#1f3d8f] hover:underline"
+                          >
+                            {vendor.businessName}
+                          </Link>
+                          <span className="block truncate text-[10px] text-[#7d8ba6]">
+                            {vendor.email || vendor.phone || "No contact info"}
+                          </span>
+                        </div>
                       </div>
                     </td>
                     <td className="border-b border-[#edf1fa] px-4 py-4 text-[#4f5f82]">{vendor.owner}</td>
                     <td className="border-b border-[#edf1fa] px-4 py-4">
                       <span className="rounded bg-[#f1f5f9] px-2 py-1 text-[9px] font-semibold text-[#64748b]">
-                        {vendor.category}
+                        {vendor.category as VendorCategory}
                       </span>
                     </td>
-                    <td className="border-b border-[#edf1fa] px-4 py-4 text-[#2f3f60]">{(vendor.bookings ?? 0).toLocaleString()}</td>
-                    <td className="border-b border-[#edf1fa] px-4 py-4 text-[#f59e0b]">
-                      <span className="inline-flex items-center gap-1">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.1 5.9-.9L12 3.5Z" />
-                        </svg>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.1 5.9-.9L12 3.5Z" />
-                        </svg>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.1 5.9-.9L12 3.5Z" />
-                        </svg>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.1 5.9-.9L12 3.5Z" />
-                        </svg>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8-4.3-4.1 5.9-.9L12 3.5Z" />
-                        </svg>
-                      </span>
-                      <span className="ml-2 text-[#7d8ba6]">{(vendor.rating ?? 0).toFixed(1)}</span>
+                    <td className="border-b border-[#edf1fa] px-4 py-4 text-[#2f3f60]">{vendor.bookings.toLocaleString()}</td>
+                    <td className="border-b border-[#edf1fa] px-4 py-4">
+                      <span className="inline-flex items-center gap-1">{stars(vendor.rating)}</span>
+                      <span className="ml-2 text-[#7d8ba6]">{vendor.rating.toFixed(1)}</span>
                     </td>
                     <td className="border-b border-[#edf1fa] px-4 py-4">
                       <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${vendorStatusClass(vendor.status)}`}>
@@ -410,7 +629,7 @@ export function VendorsManagementView({
                           type="button"
                           onClick={() => setSelectedVendorId(vendor.id)}
                           className="grid h-6 w-6 place-items-center rounded-full border border-[#e6ecf7] text-[#64748b]"
-                          aria-label={`Open ${vendor.businessName} verification`}
+                          aria-label={`Open ${vendor.businessName} details`}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                             <path d="M1.5 12s3.7-6.5 10.5-6.5S22.5 12 22.5 12s-3.7 6.5-10.5 6.5S1.5 12 1.5 12Z" stroke="currentColor" strokeWidth="1.8" />
@@ -504,110 +723,156 @@ export function VendorsManagementView({
 
       <div
         className={`fixed inset-0 z-20 bg-black/40 transition-opacity ${
-          selectedVendor ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+          selectedVendorId ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={() => setSelectedVendorId(null)}
         aria-hidden
       />
 
       <aside
-        className={`fixed right-0 top-0 z-30 h-full w-full max-w-[320px] border-l border-[#e6ecf7] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.16)] transition-transform duration-300 ${
-          selectedVendor ? "translate-x-0" : "translate-x-full"
+        className={`fixed right-0 top-0 z-30 h-full border-l border-[#e6ecf7] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.16)] ${
+          isDraggingDrawer ? "" : "transition-[width,transform] duration-300"
+        } ${
+          selectedVendorId ? "translate-x-0" : "translate-x-full"
         }`}
+        style={{ width: `${drawerWidth}px`, maxWidth: "100vw" }}
       >
-        {selectedVendor && (
-          <div className="flex h-full flex-col overflow-hidden">
-            <header className="flex items-center justify-between bg-[#1f3d8f] -pl-1 px-5 py-4 text-white">
-              <h4 className="m-0 text-[13px] font-semibold">Verification Detail</h4>
-              <button type="button" onClick={() => setSelectedVendorId(null)} className="text-white">
-                x
-              </button>
-            </header>
+        <button
+          type="button"
+          aria-label="Resize vendor details panel"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            setIsDraggingDrawer(true);
+          }}
+          className="absolute left-0 top-0 z-40 h-full w-3 -translate-x-1/2 cursor-col-resize bg-transparent"
+        />
+        <div className="flex h-full flex-col overflow-hidden">
+          <header className="flex items-center justify-between bg-[#1f3d8f] px-5 py-4 text-white">
+            <div>
+              <h4 className="m-0 text-[13px] font-semibold">Vendor Details</h4>
+              <p className="m-0 mt-1 text-[11px] text-white/75">Live data from the backend</p>
+            </div>
+            <button type="button" onClick={() => setSelectedVendorId(null)} className="text-white">
+              x
+            </button>
+          </header>
 
-            <div className="flex-1 overflow-y-auto px-6 py-6">
-              <div className="flex flex-col items-center">
-                <Image
-                  src={safeImageSrc(selectedVendor.avatar, selectedVendor.id || selectedVendor.businessName)}
-                  alt={selectedVendor.businessName}
-                  width={64}
-                  height={64}
-                  className="h-14 w-14 rounded-lg object-cover"
-                />
-                <h3 className="m-0 mt-3 text-[16px] font-semibold text-[#1d2a43]">{selectedVendor.businessName}</h3>
-                <span className="mt-1 rounded-full bg-[#fff3d7] px-3 py-1 text-[9px] font-semibold text-[#b45309]">
-                  {selectedVendor.status === "APPROVED" ? "APPROVED" : selectedVendor.status === "BLOCKED" ? "BLOCKED" : selectedVendor.status === "REJECTED" ? "REJECTED" : "PENDING VERIFICATION"}
-                </span>
-              </div>
-
-              <div className="mt-6 space-y-5">
-                <section>
-                  <div className="flex items-start gap-2">
-                    <div className="grid h-6 w-6 place-items-center rounded-full bg-[#eef2ff] text-[#1f3d8f]">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
-                        <path d="M12 8v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                        <circle cx="12" cy="16.5" r="1" fill="currentColor" />
-                      </svg>
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            {selectedVendorLoading && !selectedVendor ? (
+              <p className="text-[13px] text-[#60718f]">Loading vendor details...</p>
+            ) : selectedVendorError && !selectedVendor ? (
+              <p className="text-[13px] text-[#dc2626]">{selectedVendorError}</p>
+            ) : selectedVendor ? (
+              <div className="space-y-6">
+                <div className="flex items-start gap-4">
+                  {renderAvatar(selectedVendor, "h-16 w-16")}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="m-0 truncate text-[18px] font-semibold text-[#1d2a43]">{selectedVendor.businessName}</h3>
+                    <p className="m-0 mt-1 text-[12px] text-[#60718f]">{selectedVendor.owner}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${vendorStatusClass(selectedVendor.status)}`}>
+                        {selectedVendor.status}
+                      </span>
+                      <span className="rounded-full bg-[#eef2ff] px-2 py-1 text-[10px] font-semibold text-[#1f3d8f]">
+                        {statusLabel(selectedVendor.verification.status)}
+                      </span>
                     </div>
+                  </div>
+                </div>
+
+                <section className="overflow-hidden rounded-3xl border border-[#e6ecf7] bg-[linear-gradient(180deg,#fbfdff_0%,#f7f9fc_100%)] p-4">
+                  <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h5 className="m-0 text-[9px] tracking-[0.08em] text-[#8b96ad] uppercase">Description</h5>
-                      <p className="m-0 mt-1 text-[10px] leading-[1.45] text-[#60718f]">
-                        {selectedVendor.verification.description}
-                      </p>
+                      <p className="m-0 text-[11px] font-semibold text-[#1d2a43]">Verification documents</p>
+                      <p className="m-0 mt-1 text-[10px] text-[#7b89a3]">Live previews from backend document URLs</p>
                     </div>
+                    <Link href={`/vendors/${selectedVendor.id}`} className="text-[11px] font-semibold text-[#1f3d8f]">
+                      Open full page
+                    </Link>
+                  </div>
+                  <DocumentsGrid docs={selectedVendor.verification.docs} />
+                </section>
+
+                <section className="grid gap-3">
+                  <div>
+                    <h5 className="m-0 text-[10px] uppercase tracking-[0.08em] text-[#8b96ad]">Contact</h5>
+                    <p className="m-0 mt-1 text-[12px] text-[#1f2d46]">{selectedVendor.email || "No email provided"}</p>
+                    <p className="m-0 mt-1 text-[12px] text-[#60718f]">{selectedVendor.phone || "No phone provided"}</p>
+                  </div>
+                  <div>
+                    <h5 className="m-0 text-[10px] uppercase tracking-[0.08em] text-[#8b96ad]">Address</h5>
+                    <p className="m-0 mt-1 text-[12px] leading-5 text-[#60718f]">{selectedVendor.verification.address}</p>
+                  </div>
+                  <div>
+                    <h5 className="m-0 text-[10px] uppercase tracking-[0.08em] text-[#8b96ad]">Description</h5>
+                    <p className="m-0 mt-1 text-[12px] leading-5 text-[#60718f]">{selectedVendor.verification.description}</p>
                   </div>
                 </section>
 
                 <section>
-                  <div className="flex items-start gap-2">
-                    <div className="grid h-6 w-6 place-items-center rounded-full bg-[#eef2ff] text-[#1f3d8f]">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <path
-                          d="M12 3.5c-3.2 0-5.5 2.4-5.5 5.6 0 4.2 5.5 10 5.5 10s5.5-5.8 5.5-10c0-3.2-2.3-5.6-5.5-5.6Z"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                        />
-                        <circle cx="12" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.6" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h5 className="m-0 text-[9px] tracking-[0.08em] text-[#8b96ad] uppercase">Address</h5>
-                      <p className="m-0 mt-1 text-[10px] leading-[1.45] text-[#60718f]">{selectedVendor.verification.address}</p>
-                    </div>
-                  </div>
-                </section>
-
-                <section>
-                  <h5 className="m-0 text-[9px] tracking-[0.08em] text-[#8b96ad] uppercase">Verification Documents</h5>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {selectedVendor.verification.docs.map((doc) => (
-                      <div key={doc.title} className="rounded-lg border border-[#e6ecf7] bg-white p-3">
-                        <div className="grid h-10 place-items-center rounded bg-[#f2f5fb] text-[#9aabca]">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <path d="M7 4h7l4 4v12H7V4Z" stroke="currentColor" strokeWidth="1.6" />
-                            <path d="M14 4v4h4" stroke="currentColor" strokeWidth="1.6" />
-                          </svg>
-                        </div>
-                        <p className="m-0 mt-2 truncate text-[9px] font-semibold text-[#3f4f70]">{doc.title}</p>
-                        <p className={`m-0 text-[9px] ${doc.state === "Verified" ? "text-[#16a34a]" : "text-[#ef4444]"}`}>{doc.state}</p>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                <section>
-                  <h5 className="m-0 text-[9px] tracking-[0.08em] text-[#8b96ad] uppercase">Reviews Summary</h5>
+                  <h5 className="m-0 text-[10px] uppercase tracking-[0.08em] text-[#8b96ad]">Review summary</h5>
                   <div className="mt-2 flex items-end gap-3">
-                    <span className="text-[30px] leading-none text-[#1d2a43]">{(selectedVendor.verification.reviewScore ?? 0).toFixed(1)}</span>
-                    <span className="text-[11px] text-[#f59e0b]">{"★".repeat(5)}</span>
+                    <span className="text-[30px] leading-none text-[#1d2a43]">{selectedVendor.verification.reviewScore.toFixed(1)}</span>
+                    <span className="flex items-center gap-1">{stars(selectedVendor.verification.reviewScore)}</span>
                   </div>
-                  <span className="mt-1 block text-[9px] text-[#8b96ad]">
-                    Based on {(selectedVendor.verification.reviewCount ?? 0).toLocaleString()} verified reviews
+                  <span className="mt-1 block text-[10px] text-[#8b96ad]">
+                    Based on {selectedVendor.verification.reviewCount.toLocaleString()} verified reviews
                   </span>
                 </section>
-              </div>
-            </div>
 
+                {selectedVendor.verification.rejectionReason ? (
+                  <section className="rounded-2xl border border-[#fee2e2] bg-[#fff5f5] p-4">
+                    <h5 className="m-0 text-[10px] uppercase tracking-[0.08em] text-[#dc2626]">Rejection reason</h5>
+                    <p className="m-0 mt-2 text-[12px] leading-5 text-[#b91c1c]">{selectedVendor.verification.rejectionReason}</p>
+                  </section>
+                ) : null}
+
+                <section className="grid gap-3">
+                  <div className="rounded-2xl border border-[#e6ecf7] bg-[#f8fafc] p-4">
+                    <h5 className="m-0 text-[10px] uppercase tracking-[0.08em] text-[#8b96ad]">Quick facts</h5>
+                    <div className="mt-3 grid gap-3">
+                      <div>
+                        <p className="m-0 text-[10px] uppercase tracking-[0.06em] text-[#94a3b8]">Category</p>
+                        <p className="m-0 mt-1 text-[12px] text-[#1f2d46]">{selectedVendor.category}</p>
+                      </div>
+                      <div>
+                        <p className="m-0 text-[10px] uppercase tracking-[0.06em] text-[#94a3b8]">Vendor ID</p>
+                        <p className="m-0 mt-1 break-all text-[12px] text-[#1f2d46]">{selectedVendor.id}</p>
+                      </div>
+                      <div>
+                        <p className="m-0 text-[10px] uppercase tracking-[0.06em] text-[#94a3b8]">Last updated</p>
+                        <p className="m-0 mt-1 text-[12px] text-[#1f2d46]">{formatDate(selectedVendor.updatedAt)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedVendor.verification.rejectionReason ? (
+                    <div className="rounded-2xl border border-[#fee2e2] bg-[#fff5f5] p-4">
+                      <h5 className="m-0 text-[10px] uppercase tracking-[0.08em] text-[#dc2626]">Review note</h5>
+                      <p className="m-0 mt-2 text-[12px] leading-5 text-[#b91c1c]">
+                        {selectedVendor.verification.rejectionReason}
+                      </p>
+                    </div>
+                  ) : null}
+                </section>
+
+                <section className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-[#e6ecf7] p-4">
+                    <p className="m-0 text-[10px] uppercase tracking-[0.08em] text-[#8b96ad]">Created</p>
+                    <p className="m-0 mt-2 text-[12px] text-[#1f2d46]">{formatDate(selectedVendor.createdAt)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-[#e6ecf7] p-4">
+                    <p className="m-0 text-[10px] uppercase tracking-[0.08em] text-[#8b96ad]">Last updated</p>
+                    <p className="m-0 mt-2 text-[12px] text-[#1f2d46]">{formatDate(selectedVendor.updatedAt)}</p>
+                  </div>
+                </section>
+              </div>
+            ) : (
+              <p className="text-[13px] text-[#60718f]">Select a vendor to load live details.</p>
+            )}
+          </div>
+
+          {selectedVendor ? (
             <div className="mt-auto border-t border-[#e6ecf7] px-6 py-5">
               <div className="flex flex-col gap-3">
                 <button
@@ -616,7 +881,7 @@ export function VendorsManagementView({
                   disabled={selectedVendor.status === "APPROVED"}
                   className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#1f3d8f] text-[12px] font-semibold text-white shadow-[0_10px_20px_rgba(31,61,143,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <BsPatchCheckFill size={18}/>
+                  <BsPatchCheckFill size={18} />
                   {primaryVendorActionLabel(selectedVendor.status)}
                 </button>
                 <button
@@ -630,8 +895,8 @@ export function VendorsManagementView({
                 </button>
               </div>
             </div>
-          </div>
-        )}
+          ) : null}
+        </div>
       </aside>
 
       {pendingVendorAction && (

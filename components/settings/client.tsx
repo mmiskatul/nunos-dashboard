@@ -40,6 +40,15 @@ type SettingsData = {
   };
 };
 
+type SettingsPatch = {
+  general?: Partial<SettingsData["general"]> & {
+    brandIdentity?: Partial<SettingsData["general"]["brandIdentity"]>;
+  };
+  commission?: Partial<SettingsData["commission"]>;
+  legal?: Partial<SettingsData["legal"]>;
+  admin?: Partial<SettingsData["admin"]>;
+};
+
 const panelClass =
   "rounded-[18px] border border-[#dfe4ee] bg-white px-4 py-4 shadow-[0_8px_26px_rgba(15,23,42,0.04)] sm:px-5";
 const inputClass =
@@ -116,7 +125,7 @@ export function SettingsView({ data }: { data: SettingsData }) {
     loadProfile();
   }, []);
 
-  const persistSettings = async (payload: Partial<SettingsData>, successMessage: string) => {
+  const persistSettings = async (payload: SettingsPatch, successMessage: string) => {
     setSaveStatus("Saving...");
     const response = await fetch("/api/settings", {
       method: "PATCH",
@@ -622,6 +631,7 @@ export function SettingsView({ data }: { data: SettingsData }) {
                 type="password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
+                autoComplete="new-password"
                 className={inputClass}
                 placeholder="••••••••"
               />
@@ -632,6 +642,7 @@ export function SettingsView({ data }: { data: SettingsData }) {
                 type="password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
+                autoComplete="new-password"
                 className={inputClass}
                 placeholder="Min. 8 characters"
               />
@@ -642,6 +653,7 @@ export function SettingsView({ data }: { data: SettingsData }) {
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
+                autoComplete="new-password"
                 className={inputClass}
                 placeholder="Repeat new password"
               />

@@ -41,6 +41,7 @@ export async function PATCH(
     body.action === "approve" ? "approved" :
     body.action === "reject" ? "rejected" :
     body.action === "block" ? "blocked" :
+    body.action === "cancel" ? "cancel" :
     null;
 
   if (!decision) {

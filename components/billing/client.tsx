@@ -677,7 +677,7 @@ export function BillingManagementView({
                       Mark as Paid
                     </h4>
                     <p className="m-0 mt-2 text-[11px] text-[#64748b]">
-                      Confirm payment for "{paidConfirmPayment.vendorName}"?
+                      Confirm payment for &quot;{paidConfirmPayment.vendorName}&quot;?
                     </p>
                   </div>
                   <button

@@ -42,9 +42,17 @@ export async function fetchApiData<T extends object>(path: string, fallback: T):
 
   try {
     const baseUrl = await resolveBaseUrl();
+    const requestHeaders = await headers();
+    const forwardedHeaders: Record<string, string> = {};
+    const authorization = requestHeaders.get("authorization");
+    const cookie = requestHeaders.get("cookie");
+    if (authorization) forwardedHeaders.authorization = authorization;
+    if (cookie) forwardedHeaders.cookie = cookie;
     const response = await fetch(`${baseUrl}${normalizedPath}`, {
       cache: "no-store",
-      next: { revalidate: 0 }
+      next: { revalidate: 0 },
+      headers: forwardedHeaders,
+      signal: AbortSignal.timeout(15_000)
     });
 
     if (!response.ok) {

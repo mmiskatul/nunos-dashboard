@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
+import { backendFetch, backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
 import { buildOfferSummaryCards, mapAdminOffer } from "@/lib/offers-admin";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ async function requestBackend(request: NextRequest, path: string, init: RequestI
   const auth = resolveAuthHeader(request);
   if (auth) headers.Authorization = auth;
 
-  return fetch(backendUrl(path), {
+  return backendFetch(backendUrl(path), {
     ...init,
     headers,
     cache: "no-store",

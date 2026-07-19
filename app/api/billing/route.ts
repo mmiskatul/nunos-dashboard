@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { proxyGet, proxyPost, backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
+import { proxyGet, backendFetch, backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -20,21 +20,21 @@ export async function PATCH(request: NextRequest) {
     if (auth) headers["Authorization"] = auth;
 
     if (action === "markPaid") {
-      const res = await fetch(backendUrl(`/platform-admin/billing/payments/${vendorCode}/mark-paid`), {
+      const res = await backendFetch(backendUrl(`/platform-admin/billing/payments/${vendorCode}/mark-paid`), {
         method: "POST",
         headers,
       });
       const data = await res.json().catch(() => ({}));
       return NextResponse.json(data, { status: res.status });
     } else if (action === "sendReminder") {
-      const res = await fetch(backendUrl(`/platform-admin/billing/payments/${vendorCode}/send-reminder`), {
+      const res = await backendFetch(backendUrl(`/platform-admin/billing/payments/${vendorCode}/send-reminder`), {
         method: "POST",
         headers,
       });
       const data = await res.json().catch(() => ({}));
       return NextResponse.json(data, { status: res.status });
     } else if (action === "updateBreakdown") {
-      const res = await fetch(backendUrl(`/platform-admin/billing/payments/${vendorCode}`), {
+      const res = await backendFetch(backendUrl(`/platform-admin/billing/payments/${vendorCode}`), {
         method: "PATCH",
         headers,
         body: JSON.stringify({ totalRevenue, commissionRate, commissionAmount }),
@@ -43,7 +43,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(data, { status: res.status });
     }
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Backend unavailable" }, { status: 502 });
   }
 }

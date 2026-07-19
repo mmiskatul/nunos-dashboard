@@ -50,6 +50,8 @@ export function Sidebar({
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
+      window.localStorage.removeItem("admin_access_token");
+      window.localStorage.removeItem("admin_refresh_token");
       router.push("/login");
     }
   };

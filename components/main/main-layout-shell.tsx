@@ -20,7 +20,7 @@ export function MainLayoutShell({
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch("/api/settings/profile");
+        const res = await fetch("/api/settings/profile", { signal: AbortSignal.timeout(15_000) });
         if (res.status === 401) {
           router.push("/login");
           return;

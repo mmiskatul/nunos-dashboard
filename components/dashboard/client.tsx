@@ -94,7 +94,6 @@ export function DashboardView({ data }: { data: DashboardData }) {
 
   useEffect(() => {
     let active = true;
-    let timer: ReturnType<typeof setInterval> | undefined;
 
     const refresh = async () => {
       setRefreshing(true);
@@ -126,7 +125,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
     };
 
     refresh();
-    timer = setInterval(refresh, 30000);
+    const timer = setInterval(refresh, 30000);
 
     const handleFocus = () => {
       void refresh();
@@ -136,7 +135,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
 
     return () => {
       active = false;
-      if (timer) clearInterval(timer);
+      clearInterval(timer);
       window.removeEventListener("focus", handleFocus);
     };
   }, []);

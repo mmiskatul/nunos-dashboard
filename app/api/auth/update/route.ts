@@ -1,5 +1,5 @@
 import { jsonError } from "@/app/api/_data";
-import { backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
+import { backendFetch, backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const auth = resolveAuthHeader(request);
     if (auth) headers.Authorization = auth;
 
-    const response = await fetch(backendUrl("/platform-admin/settings/password"), {
+    const response = await backendFetch(backendUrl("/platform-admin/settings/password"), {
       method: "PATCH",
       headers,
       body: JSON.stringify({

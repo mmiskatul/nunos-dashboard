@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { backendUrl } from "@/app/api/backend-proxy";
+import { backendFetch, backendUrl } from "@/app/api/backend-proxy";
 
 export async function POST(request: Request) {
   const refreshToken =
     request.headers.get("cookie")?.match(/nunos_dashboard_refresh_token=([^;]+)/)?.[1] ?? "";
   if (refreshToken) {
     try {
-      await fetch(backendUrl("/platform-admin/auth/logout"), {
+      await backendFetch(backendUrl("/platform-admin/auth/logout"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: decodeURIComponent(refreshToken) }),

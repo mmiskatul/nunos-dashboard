@@ -1324,7 +1324,7 @@ export function OffersManagementView({
                         Delete Offer
                       </h4>
                       <p className="m-0 mt-2 text-[11px] text-[#64748b]">
-                        Are you sure you want to delete "{deleteConfirmOffer.name}"? This action
+                        Are you sure you want to delete &quot;{deleteConfirmOffer.name}&quot;? This action
                         cannot be undone.
                       </p>
                     </div>

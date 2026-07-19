@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
+import { backendFetch, backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
 import { mapAdminUserToProfile } from "@/lib/users-admin";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function GET(
     const auth = resolveAuthHeader(request);
     if (auth) headers.Authorization = auth;
 
-    const response = await fetch(backendUrl(`/platform-admin/users/${id}`), {
+    const response = await backendFetch(backendUrl(`/platform-admin/users/${id}`), {
       method: "GET",
       headers,
       cache: "no-store",
@@ -26,9 +26,9 @@ export async function GET(
     }
 
     return NextResponse.json({ user: mapAdminUserToProfile(payload) });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { detail: `Failed to load user: ${String(error)}` },
+      { detail: "The backend did not respond in time." },
       { status: 502 },
     );
   }
@@ -43,7 +43,21 @@ export async function PATCH(
   const action = body.action ?? body.status;
 
   if (action === "resetPassword") {
-    return NextResponse.json({ detail: "Reset password is not implemented yet." }, { status: 501 });
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const auth = resolveAuthHeader(request);
+      if (auth) headers.Authorization = auth;
+
+      const response = await backendFetch(backendUrl(`/platform-admin/users/${id}/password-reset-request`), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json().catch(() => ({}));
+      return NextResponse.json(payload, { status: response.status });
+    } catch {
+      return NextResponse.json({ detail: "The backend did not respond in time." }, { status: 502 });
+    }
   }
 
   const statusValue =
@@ -60,7 +74,7 @@ export async function PATCH(
     const auth = resolveAuthHeader(request);
     if (auth) headers.Authorization = auth;
 
-    const response = await fetch(backendUrl(`/platform-admin/users/${id}/status`), {
+    const response = await backendFetch(backendUrl(`/platform-admin/users/${id}/status`), {
       method: "PATCH",
       headers,
       body: JSON.stringify({ status: statusValue }),
@@ -71,9 +85,9 @@ export async function PATCH(
     }
 
     return NextResponse.json({ user: mapAdminUserToProfile(payload) });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { detail: `Failed to update user: ${String(error)}` },
+      { detail: "The backend did not respond in time." },
       { status: 502 },
     );
   }

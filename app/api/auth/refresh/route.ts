@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { backendUrl } from "@/app/api/backend-proxy";
+import { backendFetch, backendUrl } from "@/app/api/backend-proxy";
 
 export async function POST(request: Request) {
   try {
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "Refresh token required." }, { status: 400 });
     }
 
-    const response = await fetch(backendUrl("/platform-admin/auth/refresh"), {
+    const response = await backendFetch(backendUrl("/platform-admin/auth/refresh"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),

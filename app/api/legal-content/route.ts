@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
+import { backendFetch, backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -44,16 +44,16 @@ function forwardHeaders(request?: Request | NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const response = await fetch(backendUrl("/platform-admin/settings/legal-content"), {
+    const response = await backendFetch(backendUrl("/platform-admin/settings/legal-content"), {
       method: "GET",
       headers: forwardHeaders(request),
       cache: "no-store",
     });
     const payload = (await response.json().catch(() => ({}))) as LegalContentData | { detail?: string };
     return NextResponse.json(payload, { status: response.status });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { detail: error instanceof Error ? error.message : "Failed to read legal content data" },
+      { detail: "The backend did not respond in time." },
       { status: 502 },
     );
   }
@@ -67,7 +67,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ detail: "Invalid legal content payload" }, { status: 400 });
     }
 
-    const response = await fetch(backendUrl("/platform-admin/settings/legal-content"), {
+    const response = await backendFetch(backendUrl("/platform-admin/settings/legal-content"), {
       method: "PATCH",
       headers: forwardHeaders(request),
       body: JSON.stringify(payload),
@@ -75,9 +75,9 @@ export async function PATCH(request: Request) {
     });
     const nextLegalContent = (await response.json().catch(() => ({}))) as LegalContentData | { detail?: string };
     return NextResponse.json(nextLegalContent, { status: response.status });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { detail: error instanceof Error ? error.message : "Failed to update legal content" },
+      { detail: "The backend did not respond in time." },
       { status: 502 },
     );
   }

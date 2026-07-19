@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
+import { backendFetch, backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
 import { buildVendorSummaryCards, mapVendorListItem } from "@/lib/vendors-admin";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const auth = resolveAuthHeader(request);
     if (auth) headers.Authorization = auth;
 
-    const response = await fetch(url.toString(), { method: "GET", headers, cache: "no-store" });
+    const response = await backendFetch(url, { method: "GET", headers, cache: "no-store" });
     const payload = (await response.json().catch(() => ({}))) as { vendors?: unknown[] };
     if (!response.ok) {
       return NextResponse.json(payload, { status: response.status });
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       summaryCards: buildVendorSummaryCards(vendors),
       vendors,
     });
-  } catch (error) {
-    return NextResponse.json({ detail: `Failed to load vendors: ${String(error)}` }, { status: 502 });
+  } catch {
+    return NextResponse.json({ detail: "The backend did not respond in time." }, { status: 502 });
   }
 }

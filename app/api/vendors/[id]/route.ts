@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
+import { backendFetch, backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
 import { mapVendorDetailPayload, mapVendorListItem } from "@/lib/vendors-admin";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function GET(
     const auth = resolveAuthHeader(request);
     if (auth) headers.Authorization = auth;
 
-    const response = await fetch(backendUrl(`/platform-admin/vendors/${id}`), {
+    const response = await backendFetch(backendUrl(`/platform-admin/vendors/${id}`), {
       method: "GET",
       headers,
       cache: "no-store",
@@ -26,8 +26,8 @@ export async function GET(
     }
 
     return NextResponse.json({ vendor: mapVendorDetailPayload(payload) });
-  } catch (error) {
-    return NextResponse.json({ detail: `Failed to load vendor: ${String(error)}` }, { status: 502 });
+  } catch {
+    return NextResponse.json({ detail: "The backend did not respond in time." }, { status: 502 });
   }
 }
 
@@ -53,7 +53,7 @@ export async function PATCH(
     const auth = resolveAuthHeader(request);
     if (auth) headers.Authorization = auth;
 
-    const response = await fetch(backendUrl(`/platform-admin/vendors/${id}/status`), {
+    const response = await backendFetch(backendUrl(`/platform-admin/vendors/${id}/status`), {
       method: "PATCH",
       headers,
       body: JSON.stringify({ status: decision }),
@@ -64,7 +64,7 @@ export async function PATCH(
     }
 
     return NextResponse.json({ vendor: mapVendorListItem(payload) });
-  } catch (error) {
-    return NextResponse.json({ detail: `Failed to update vendor: ${String(error)}` }, { status: 502 });
+  } catch {
+    return NextResponse.json({ detail: "The backend did not respond in time." }, { status: 502 });
   }
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
+import { backendFetch, backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     url.searchParams.set(key, value);
   });
 
-  const response = await fetch(url.toString(), { method: "GET", headers, cache: "no-store" });
+  const response = await backendFetch(url, { method: "GET", headers, cache: "no-store" });
   const payload = (await response.json().catch(() => ({}))) as {
     summary_cards?: unknown[];
     tickets?: unknown[];

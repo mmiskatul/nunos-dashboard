@@ -147,11 +147,6 @@ export function useUsersManagement(initialData: { users: UserProfile[]; summaryC
     };
   }, []);
 
-  useEffect(() => {
-    setUsers(initialData.users);
-    setBaseSummaryCards(initialData.summaryCards);
-  }, [initialData.summaryCards, initialData.users]);
-
   const persistUserAction = async (id: string, action: "block" | "unblock" | "resetPassword") => {
     const applyLocalUpdate = (current: UserProfile) => {
       if (action === "block" || action === "unblock") {

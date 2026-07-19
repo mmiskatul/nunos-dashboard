@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const DEFAULT_BACKEND_BASE_URL = "https://nunos-backend.vercel.app";
+export const BACKEND_TIMEOUT_MS = 15_000;
 
 function getBackendBase(): string {
   return (process.env.NEXT_PUBLIC_AUTH_API_BASE?.trim() || DEFAULT_BACKEND_BASE_URL).replace(/\/+$/, "");
@@ -15,6 +16,13 @@ function getBackendBase(): string {
 export function backendUrl(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${getBackendBase()}/api/v1${normalized}`;
+}
+
+export function backendFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(BACKEND_TIMEOUT_MS),
+  });
 }
 
 export function resolveAuthHeader(request: Request | NextRequest): string | null {
@@ -27,8 +35,8 @@ export function resolveAuthHeader(request: Request | NextRequest): string | null
     return `Bearer ${decodeURIComponent(match[1])}`;
   }
 
-  if ("cookies" in request && typeof (request as any).cookies?.get === "function") {
-    const token = (request as any).cookies.get("nunos_dashboard_access_token")?.value;
+  if (request instanceof NextRequest) {
+    const token = request.cookies.get("nunos_dashboard_access_token")?.value;
     if (token) {
       return `Bearer ${token}`;
     }
@@ -54,13 +62,13 @@ export async function proxyGet(
     const auth = resolveAuthHeader(request);
     if (auth) headers["Authorization"] = auth;
 
-    const res = await fetch(url.toString(), { method: "GET", headers, cache: "no-store" });
+    const res = await backendFetch(url, { method: "GET", headers, cache: "no-store" });
     const data = await res.json().catch(() => ({}));
 
     return NextResponse.json(data, { status: res.status });
-  } catch (err) {
+  } catch {
     return NextResponse.json(
-      { error: "Backend unavailable", detail: String(err) },
+      { error: "Backend unavailable", detail: "The backend did not respond in time." },
       { status: 502 },
     );
   }
@@ -78,16 +86,16 @@ export async function proxyPost(
     const auth = resolveAuthHeader(request);
     if (auth) headers["Authorization"] = auth;
 
-    const res = await fetch(backendUrl(backendPath), {
+    const res = await backendFetch(backendUrl(backendPath), {
       method: "POST",
       headers,
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
     return NextResponse.json(data, { status: res.status });
-  } catch (err) {
+  } catch {
     return NextResponse.json(
-      { error: "Backend unavailable", detail: String(err) },
+      { error: "Backend unavailable", detail: "The backend did not respond in time." },
       { status: 502 },
     );
   }
@@ -105,16 +113,16 @@ export async function proxyPatch(
     const auth = resolveAuthHeader(request);
     if (auth) headers["Authorization"] = auth;
 
-    const res = await fetch(backendUrl(backendPath), {
+    const res = await backendFetch(backendUrl(backendPath), {
       method: "PATCH",
       headers,
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
     return NextResponse.json(data, { status: res.status });
-  } catch (err) {
+  } catch {
     return NextResponse.json(
-      { error: "Backend unavailable", detail: String(err) },
+      { error: "Backend unavailable", detail: "The backend did not respond in time." },
       { status: 502 },
     );
   }
@@ -129,15 +137,15 @@ export async function proxyDelete(
     const auth = resolveAuthHeader(request);
     if (auth) headers["Authorization"] = auth;
 
-    const res = await fetch(backendUrl(backendPath), {
+    const res = await backendFetch(backendUrl(backendPath), {
       method: "DELETE",
       headers,
     });
     const data = await res.json().catch(() => ({}));
     return NextResponse.json(data, { status: res.status });
-  } catch (err) {
+  } catch {
     return NextResponse.json(
-      { error: "Backend unavailable", detail: String(err) },
+      { error: "Backend unavailable", detail: "The backend did not respond in time." },
       { status: 502 },
     );
   }

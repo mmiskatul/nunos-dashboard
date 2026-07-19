@@ -20,7 +20,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const hasAuth = request.cookies.get("nunos_admin_auth")?.value === "true";
+  const hasAuth =
+    request.cookies.get("nunos_admin_auth")?.value === "true" &&
+    Boolean(request.cookies.get("nunos_dashboard_access_token")?.value);
   if (!hasAuth) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";

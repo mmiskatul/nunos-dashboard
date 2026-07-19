@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
+import { backendFetch, backendUrl, resolveAuthHeader } from "@/app/api/backend-proxy";
 import { buildUsersSummaryCards, mapAdminUserToProfile } from "@/lib/users-admin";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const auth = resolveAuthHeader(request);
     if (auth) headers.Authorization = auth;
 
-    const response = await fetch(url.toString(), { method: "GET", headers, cache: "no-store" });
+    const response = await backendFetch(url, { method: "GET", headers, cache: "no-store" });
     const payload = (await response.json().catch(() => ({}))) as {
       users?: unknown[];
       detail?: string;
@@ -37,9 +37,9 @@ export async function GET(request: NextRequest) {
       summaryCards: buildUsersSummaryCards(users, createdAts),
       users,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { detail: `Failed to load users: ${String(error)}` },
+      { detail: "The backend did not respond in time." },
       { status: 502 },
     );
   }

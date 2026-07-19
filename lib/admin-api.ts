@@ -266,7 +266,7 @@ export async function adminUpdateUserStatus(
 }
 
 export async function adminResetUserPassword(userId: string) {
-  return adminRequest(`${PA}/users/${userId}/reset-password`, "POST", {});
+  return adminRequest(`${PA}/users/${userId}/password-reset-request`, "POST", {});
 }
 
 export async function adminGetUserBookings(userId: string) {

@@ -20,6 +20,12 @@ export type BookingItem = {
   checkIn: string;
   checkOut: string;
   createdAt: string;
+  requestedAt: string;
+  acceptedAt: string;
+  completedAt: string;
+  canceledAt: string;
+  statusNote: string;
+  statusHistory: Array<{ status?: string; at?: string; actor?: string; label?: string; note?: string }>;
   image: string;
 };
 

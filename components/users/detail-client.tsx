@@ -355,10 +355,18 @@ export function UserDetailPageClient({ userId }: { userId: string }) {
                           <span><b className="text-[#334155]">Staff:</b> {booking.staff}</span>
                           <span><b className="text-[#334155]">Seating:</b> {booking.seating}</span>
                           <span><b className="text-[#334155]">Payment:</b> {booking.paymentStatus}</span>
-                          {booking.bookingCode ? <span><b className="text-[#334155]">Booking ID:</b> {booking.bookingCode}</span> : null}
-                          {booking.checkIn || booking.checkOut ? <span><b className="text-[#334155]">Stay:</b> {booking.checkIn || "-"} to {booking.checkOut || "-"}</span> : null}
-                        </div>
-                        <p className="m-0 mt-2 text-[12px] text-[#60718f]"><b className="text-[#334155]">Notes:</b> {booking.notes}</p>
+                        {booking.bookingCode ? <span><b className="text-[#334155]">Booking ID:</b> {booking.bookingCode}</span> : null}
+                        {booking.checkIn || booking.checkOut ? <span><b className="text-[#334155]">Stay:</b> {booking.checkIn || "-"} to {booking.checkOut || "-"}</span> : null}
+                      </div>
+                      <div className="mt-3 grid gap-2 border-t border-[#e5eaf2] pt-3 text-[11px] text-[#60718f] sm:grid-cols-2">
+                        <span><b className="text-[#334155]">Request sent:</b> {formatDateTime(booking.requestedAt)}</span>
+                        <span><b className="text-[#334155]">Accepted:</b> {booking.acceptedAt ? formatDateTime(booking.acceptedAt) : "Not recorded"}</span>
+                        {booking.completedAt ? <span><b className="text-[#334155]">Completed:</b> {formatDateTime(booking.completedAt)}</span> : null}
+                        {booking.canceledAt ? <span><b className="text-[#334155]">Cancelled:</b> {formatDateTime(booking.canceledAt)}</span> : null}
+                      </div>
+                      <p className="m-0 mt-2 text-[12px] text-[#60718f]"><b className="text-[#334155]">Notes:</b> {booking.notes}</p>
+                      {booking.statusNote ? <p className="m-0 mt-1 text-[12px] text-[#60718f]"><b className="text-[#334155]">Provider status note:</b> {booking.statusNote}</p> : null}
+                      {booking.statusHistory.length > 0 ? <div className="mt-3 space-y-1 border-t border-[#e5eaf2] pt-2 text-[11px] text-[#60718f]">{booking.statusHistory.map((event, eventIndex) => <p key={`${event.status}-${event.at}-${eventIndex}`} className="m-0"><b className="text-[#334155]">{event.label || `${String(event.status || "Status").replaceAll("_", " ")} by ${event.actor === "customer" ? "customer" : "service provider"}`}:</b> {formatDateTime(String(event.at || ""))}</p>)}</div> : null}
                         {booking.createdAt ? <p className="m-0 mt-1 text-[11px] text-[#94a3b8]">Booked {formatDateTime(booking.createdAt)}</p> : null}
                       </div>
                       <div className="ml-auto flex shrink-0 flex-col items-start gap-2 sm:items-end">

@@ -97,6 +97,12 @@ function mapRecentBookings(record: AnyRecord): UserProfile["recentBookings"] {
       checkIn: asString(booking.check_in),
       checkOut: asString(booking.check_out),
       createdAt: asString(booking.created_at),
+      requestedAt: asString(booking.requested_at, asString(booking.created_at)),
+      acceptedAt: asString(booking.accepted_at),
+      completedAt: asString(booking.completed_at),
+      canceledAt: asString(booking.canceled_at),
+      statusNote: asString(booking.status_note),
+      statusHistory: Array.isArray(booking.status_history) ? booking.status_history as UserProfile["recentBookings"][number]["statusHistory"] : [],
       image: asString(booking.image),
     };
   });

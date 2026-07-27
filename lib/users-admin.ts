@@ -80,10 +80,23 @@ function mapRecentBookings(record: AnyRecord): UserProfile["recentBookings"] {
   return raw.map((item, index) => {
     const booking = asRecord(item);
     return {
+      id: asString(booking.id),
       hotel: asString(booking.title, `Booking ${index + 1}`),
+      service: asString(booking.service, asString(booking.title, "Booking")),
       range: asString(booking.range, "Scheduled"),
+      date: asString(booking.date),
+      time: asString(booking.time),
+      bookingCode: asString(booking.booking_code),
       amount: formatCurrency(asNumber(booking.amount, 0)),
       status: asString(booking.status, "PENDING"),
+      paymentStatus: asString(booking.payment_status, "UNKNOWN"),
+      guests: String(booking.guests ?? "Not specified"),
+      staff: asString(booking.staff, "Not assigned"),
+      notes: asString(booking.notes, "None"),
+      seating: asString(booking.seating, "Not specified"),
+      checkIn: asString(booking.check_in),
+      checkOut: asString(booking.check_out),
+      createdAt: asString(booking.created_at),
       image: asString(booking.image),
     };
   });

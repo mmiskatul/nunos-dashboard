@@ -3,10 +3,23 @@ export type ContactType = "mail" | "phone" | "pin";
 export type ActionTone = "danger" | "neutral";
 
 export type BookingItem = {
+  id: string;
   hotel: string;
+  service: string;
   range: string;
+  date: string;
+  time: string;
+  bookingCode: string;
   amount: string;
   status: string;
+  paymentStatus: string;
+  guests: string;
+  staff: string;
+  notes: string;
+  seating: string;
+  checkIn: string;
+  checkOut: string;
+  createdAt: string;
   image: string;
 };
 

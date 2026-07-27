@@ -341,19 +341,31 @@ export function UserDetailPageClient({ userId }: { userId: string }) {
               {user.recentBookings.length > 0 ? (
                 user.recentBookings.map((booking, index) => (
                   <div
-                    key={`${booking.hotel}-${booking.range}-${index}`}
+                    key={`${booking.id || booking.hotel}-${booking.range}-${index}`}
                     className="rounded-2xl border border-[#edf2f7] bg-[#f8fafc] p-4"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col gap-4 sm:flex-row">
+                      <img src={booking.image} alt="" className="h-24 w-full rounded-xl object-cover sm:h-20 sm:w-28" />
                       <div className="min-w-0">
                         <p className="m-0 text-[14px] font-semibold text-[#1f2d46]">{booking.hotel}</p>
-                        <p className="m-0 mt-1 text-[12px] text-[#7b89a3]">{booking.range}</p>
+                        <p className="m-0 mt-1 text-[12px] text-[#7b89a3]">{booking.service} · {booking.range}</p>
+                        <div className="mt-3 grid gap-x-6 gap-y-1 text-[12px] text-[#60718f] sm:grid-cols-2">
+                          <span><b className="text-[#334155]">When:</b> {booking.date || booking.range}{booking.time ? ` at ${booking.time}` : ""}</span>
+                          <span><b className="text-[#334155]">Guests:</b> {booking.guests}</span>
+                          <span><b className="text-[#334155]">Staff:</b> {booking.staff}</span>
+                          <span><b className="text-[#334155]">Seating:</b> {booking.seating}</span>
+                          <span><b className="text-[#334155]">Payment:</b> {booking.paymentStatus}</span>
+                          {booking.bookingCode ? <span><b className="text-[#334155]">Booking ID:</b> {booking.bookingCode}</span> : null}
+                          {booking.checkIn || booking.checkOut ? <span><b className="text-[#334155]">Stay:</b> {booking.checkIn || "-"} to {booking.checkOut || "-"}</span> : null}
+                        </div>
+                        <p className="m-0 mt-2 text-[12px] text-[#60718f]"><b className="text-[#334155]">Notes:</b> {booking.notes}</p>
+                        {booking.createdAt ? <p className="m-0 mt-1 text-[11px] text-[#94a3b8]">Booked {formatDateTime(booking.createdAt)}</p> : null}
                       </div>
-                      <span className="rounded-full bg-[#eef2ff] px-3 py-1 text-[10px] font-semibold text-[#1f3d8f]">
-                        {booking.status}
-                      </span>
+                      <div className="ml-auto flex shrink-0 flex-col items-start gap-2 sm:items-end">
+                        <span className="rounded-full bg-[#eef2ff] px-3 py-1 text-[10px] font-semibold text-[#1f3d8f]">{booking.status}</span>
+                        <span className="text-[13px] font-semibold text-[#1d2a43]">{booking.amount}</span>
+                      </div>
                     </div>
-                    <p className="m-0 mt-3 text-[13px] font-semibold text-[#1d2a43]">{booking.amount}</p>
                   </div>
                 ))
               ) : (

@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Nunonas Dashboard",
-  description: "Platform overview dashboard built with Next.js and TypeScript"
+  title: "Activity Planner",
+  description: "Activity Planner administration dashboard",
+  icons: { icon: "/activity-planner-logo.png", apple: "/activity-planner-logo.png" }
 };
 
 export default function RootLayout({

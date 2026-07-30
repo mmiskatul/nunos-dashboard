@@ -58,8 +58,9 @@ export function Sidebar({
 
   return (
     <aside className="sticky top-0 flex h-screen self-start flex-col overflow-hidden border-r border-white/10 bg-[var(--bg-sidebar)] text-[#f7f9ff] max-[980px]:static max-[980px]:h-auto">
-      <Link href="/"  className="border-b border-white/10 px-[22px] py-[20px] text-[30px] font-bold">
-        Logo
+      <Link href="/" className="flex items-center gap-3 border-b border-white/10 px-[22px] py-[16px]">
+        <img src="/activity-planner-logo.png" alt="Activity Planner" className="h-10 w-10 rounded-xl object-cover" />
+        <span className="text-[18px] font-bold leading-tight">Activity Planner</span>
       </Link>
       <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-[10px] py-[14px]">
         {navItems.map((item) => {

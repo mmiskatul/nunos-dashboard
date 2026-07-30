@@ -34,6 +34,13 @@ export type DashboardData = {
   bookingByRange: Record<Range, Array<{ name: string; value: number; color: string }>>;
   bookingTotals: Record<Range, number>;
   vendors: Array<{ id: string; code: string; name: string; category: string; rating: string; revenue: string; status: string }>;
+  details?: {
+    users?: { total: number; active: number };
+    vendors?: { total: number; active: number; pending: number; blocked: number };
+    bookings?: { total: number; pending: number; confirmed: number; completed: number; cancelled: number };
+    offers?: { total: number; active: number; inactive: number };
+  };
+  recentBookings?: Array<{ id: string; customer: string; vendor: string; type: string; amount: number; status: string; date: string }>;
 };
 
 const EMPTY_DATA: DashboardData = {
@@ -49,6 +56,7 @@ const EMPTY_DATA: DashboardData = {
     monthly: 0
   },
   vendors: []
+  ,details: {}, recentBookings: []
 };
 
 const statsIconMap: Record<StatIcon, typeof FiTag> = {
@@ -145,6 +153,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
   const bookingTotal = (liveData.bookingTotals?.[range]) ?? 0;
   const vendorTotalPages = Math.max(1, Math.ceil((liveData.vendors?.length ?? 0) / vendorPageSize));
   const pagedVendors = (liveData.vendors ?? []).slice((vendorPage - 1) * vendorPageSize, vendorPage * vendorPageSize);
+  const details = liveData.details ?? EMPTY_DATA.details;
 
   useEffect(() => {
     setVendorPage(1);
@@ -178,6 +187,26 @@ export function DashboardView({ data }: { data: DashboardData }) {
         })}
       </section>
 
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          { title: "Users", values: [["Total", details?.users?.total ?? 0], ["Active", details?.users?.active ?? 0]] },
+          { title: "Vendors", values: [["Total", details?.vendors?.total ?? 0], ["Active", details?.vendors?.active ?? 0], ["Pending", details?.vendors?.pending ?? 0], ["Blocked", details?.vendors?.blocked ?? 0]] },
+          { title: "Bookings", values: [["Total", details?.bookings?.total ?? 0], ["Pending", details?.bookings?.pending ?? 0], ["Confirmed", details?.bookings?.confirmed ?? 0], ["Completed", details?.bookings?.completed ?? 0], ["Cancelled", details?.bookings?.cancelled ?? 0]] },
+          { title: "Offers", values: [["Total", details?.offers?.total ?? 0], ["Active", details?.offers?.active ?? 0], ["Inactive", details?.offers?.inactive ?? 0]] }
+        ].map((group) => (
+          <article key={group.title} className="rounded-xl border border-[#dbe2ef] bg-white p-4">
+            <h3 className="m-0 mb-3 text-[16px] font-semibold text-[#1f2b43]">{group.title} details</h3>
+            <div className="space-y-2">
+              {group.values.map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between text-[13px]">
+                  <span className="text-[#7a88a6]">{label}</span><strong className="text-[#1f2b43]">{value}</strong>
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </section>
+
       <section className="grid grid-cols-1 gap-3 xl:grid-cols-[2.2fr_1fr]">
         <article className="rounded-xl border border-[#dbe2ef] bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -204,8 +233,8 @@ export function DashboardView({ data }: { data: DashboardData }) {
             <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={300}>
               <BarChart data={revenueData} margin={{ top: 12, right: 4, left: 0, bottom: 8 }} barGap={4}>
                 <XAxis dataKey="period" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: "#9aa6c0", fontWeight: 700 }} />
-                <YAxis hide domain={[0, 100]} />
-                <Tooltip formatter={(value) => [`${value ?? 0}`, "Index"]} />
+                <YAxis hide />
+                <Tooltip formatter={(value) => [`$${Number(value ?? 0).toLocaleString()}`, "Revenue"]} />
                 <Bar dataKey="value" fill="#bec5d8" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -348,6 +377,22 @@ export function DashboardView({ data }: { data: DashboardData }) {
             </button>
           </div>
         </footer>
+      </section>
+
+      <section className="rounded-xl border border-[#dbe2ef] bg-white p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div><h3 className="m-0 text-[24px] font-semibold text-[#1f2b43]">Recent bookings</h3><p className="m-0 mt-1 text-[12px] text-[#8b96ad]">Latest booking activity across the platform.</p></div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] border-collapse text-[13px]"><thead><tr>
+            {['CUSTOMER','VENDOR','TYPE','AMOUNT','STATUS','DATE'].map((label) => <th key={label} className="border-b border-[#edf1fa] px-3 py-2 text-left text-[10px] text-[#8b96ad]">{label}</th>)}
+          </tr></thead><tbody>
+            {(liveData.recentBookings ?? []).map((booking) => <tr key={booking.id}>
+              <td className="border-b border-[#edf1fa] px-3 py-3 font-semibold text-[#1f2b43]">{booking.customer}</td><td className="border-b border-[#edf1fa] px-3 py-3 text-[#5f6f8b]">{booking.vendor}</td><td className="border-b border-[#edf1fa] px-3 py-3 text-[#5f6f8b]">{booking.type}</td><td className="border-b border-[#edf1fa] px-3 py-3 font-semibold text-[#2b3852]">${booking.amount.toFixed(2)}</td><td className="border-b border-[#edf1fa] px-3 py-3 text-[#5f6f8b]">{booking.status}</td><td className="border-b border-[#edf1fa] px-3 py-3 text-[#8b96ad]">{booking.date}</td>
+            </tr>)}
+          </tbody></table>
+          {!liveData.recentBookings?.length && <p className="m-0 py-8 text-center text-[13px] text-[#8b96ad]">No bookings found.</p>}
+        </div>
       </section>
 
       {navigatingVendorId ? (
